@@ -5,7 +5,7 @@ import { loadAdapters } from '../adapters/registry.mjs';
 
 const procs = new Map();
 const adapters = loadAdapters();
-const pidDir = '/var/lib/habitat/adapters';
+const pidDir = process.env.HABITAT_ADAPTER_STATE_DIR || '/var/lib/habitat/adapters';
 fs.mkdirSync(pidDir, { recursive: true });
 const pidFile = (name) => `${pidDir}/${name}.pid`;
 

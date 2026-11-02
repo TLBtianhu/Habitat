@@ -42,8 +42,9 @@ const proc = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', impo
     HABITAT_AFTER_ACTION_FILE: afterFile,
     HABITAT_OWNER_TOKEN_FILE: ownerFile,
     HABITAT_AGENT_TOKEN_FILE: agentFile,
+    HABITAT_ADAPTER_STATE_DIR: `/tmp/habitat-cross-adapters-${process.pid}`,
   },
-  stdio: ['ignore', 'inherit', 'inherit'],
+  stdio: ['ignore', 'ignore', 'ignore'],
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function post(path, body, owner = true) {
@@ -89,4 +90,5 @@ try {
   proc.kill();
   fake.close();
   for (const f of [tasksFile, outboxFile, policyFile, afterFile, ownerFile, agentFile]) fs.rmSync(f, { force: true });
+  fs.rmSync(`/tmp/habitat-cross-adapters-${process.pid}`, { recursive: true, force: true });
 }

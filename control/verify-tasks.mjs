@@ -17,7 +17,7 @@ let proc;
 
 async function start() {
   proc = spawn(process.execPath, [entry], {
-    env: { ...process.env, HABITAT_CONTROL_PORT: String(PORT), HABITAT_TASKS_FILE: FILE, HABITAT_OWNER_TOKEN_FILE: ownerFile, HABITAT_AGENT_TOKEN_FILE: agentFile },
+    env: { ...process.env, HABITAT_CONTROL_PORT: String(PORT), HABITAT_TASKS_FILE: FILE, HABITAT_OWNER_TOKEN_FILE: ownerFile, HABITAT_AGENT_TOKEN_FILE: agentFile, HABITAT_ADAPTER_STATE_DIR: `/tmp/habitat-tasks-adapters-${process.pid}` },
     stdio: 'ignore',
   });
   await sleep(350);
@@ -57,4 +57,5 @@ try {
   try { fs.rmSync(FILE, { force: true }); } catch {}
   try { fs.rmSync(ownerFile, { force: true }); } catch {}
   try { fs.rmSync(agentFile, { force: true }); } catch {}
+  try { fs.rmSync(`/tmp/habitat-tasks-adapters-${process.pid}`, { recursive: true, force: true }); } catch {}
 }
