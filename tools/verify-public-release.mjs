@@ -14,7 +14,7 @@ const forbidden = [
   '/home/' + 'tlb3',
   'C:\\Users\\30680',
 ];
-const required = ['LICENSE', 'NOTICE.md', 'README.md', '.gitignore', 'package.json', 'package-lock.json', 'docs/distribution/forms.md', 'docs/distribution/runtime-policy.md', 'docs/distribution/plugin-ecosystem.md'];
+const required = ['LICENSE', 'NOTICE.md', 'README.md', '.gitignore', 'package.json', 'package-lock.json', 'docs/distribution/forms.md', 'docs/distribution/runtime-policy.md', 'docs/distribution/plugin-ecosystem.md', 'runtime/lock.json', 'runtime/sbom.json', 'runtime/lock.sig.json', 'runtime/revocations.json', 'runtime/release-public-key.pem'];
 for (const rel of required) {
   if (!fs.existsSync(path.join(ROOT, rel))) throw new Error('缺少公开快照文件: ' + rel);
 }

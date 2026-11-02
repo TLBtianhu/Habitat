@@ -13,7 +13,7 @@ const INCLUDE = [
   'README.md', 'ARCHITECTURE.md', 'PLAN.md', 'worlds.json', 'package.json', 'package-lock.json',
   'tools', 'director', 'runtime', 'stage', 'agent', 'identity', 'config',
   'desktop', 'voice', 'audio', 'control', 'clients', 'adapters', 'plugins', 'mcp',
-  'docs', 'assets-packs/dafeiyu',
+  'docs',
 ];
 const EXCLUDE = /node_modules|artifacts|\.git|dist|\.log$|mc-1\.21\.4|work\/|world-server|stage\/hls|tools\/bridge\.mjs|tools\/play-demo\.mjs|tools\/bili-danmaku-ws\.mjs|tools\/test-|clients\/test-|clients\/_|\.tmp|\.env(?:\..*)?$|__pycache__/;
 const TEXT = /\.(?:mjs|js|json|md|sh|ps1|ya?ml|txt)$/i;
@@ -67,7 +67,7 @@ for (const forbidden of ['tools/bridge.mjs', 'display/server.mjs']) {
 
 fs.mkdirSync(DIST, { recursive: true });
 if (fs.existsSync(ZIP)) fs.rmSync(ZIP);
-execFileSync('tar.exe', ['-a', '-c', '-f', ZIP, '-C', path.dirname(STAGE), 'Fishbowl'], { stdio: 'inherit' });
+execFileSync(process.platform === 'win32' ? 'tar.exe' : 'tar', ['-a', '-c', '-f', ZIP, '-C', path.dirname(STAGE), 'Fishbowl'], { stdio: 'inherit' });
 
 const kb = Math.round(fs.statSync(ZIP).size / 1024);
 console.log(`package: ${ZIP} · ${count} files (${textCount} scanned) · ${kb} KB`);

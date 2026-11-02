@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify runtime lock and SBOM
+        run: node tools/verify-runtime-lock.mjs
+      - name: Verify public snapshot
+        run: node tools/verify-public-release.mjs
+      - name: Core agent and memory tests
+        run: |
+          node agent/verify-episode.mjs
+          node agent/verify-memory-slice.mjs
+          node agent/verify-residence-policy.mjs
+          node agent/verify-residence-memory-store.mjs
+          node agent/verify-after-action.mjs
+          node agent/verify-event-pump.mjs
+          node agent/verify-outbox.mjs
+          node agent/verify-presence.mjs
+      - name: Plugin and protocol tests
+        run: |
+          node adapters/verify-plugin-registry.mjs
+          node adapters/qq/verify-provider.mjs
+          node clients/verify-onebot-supervisor.mjs
+          node clients/verify-bilibili-supervisor.mjs
+          node mcp/verify-mcp.mjs
+      - name: Control and recovery tests
+        run: |
+          node control/verify-cross-channel.mjs
+          node control/verify-cross-channel-http.mjs
+          node control/verify-tasks.mjs
+          node control/verify-outlet-supervisor.mjs
+      - name: Skill and phase tests
+        run: |
+          node --test --test-force-exit runtime/skill-runtime.test.mjs
+          node --test --test-force-exit director/phase-machine.test.mjs
+      - name: Session and compositor tests
+        run: |
+          node agent/verify-session.mjs
+          node desktop/verify-compositor.mjs
+      - name: Build and verify distribution
+        run: |
+          node tools/package.mjs
+          node tools/verify-distribution.mjs
+      - name: Upload portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: habitat-portable-${{ matrix.os }}
+          path: dist/fishbowl-v0.1.zip
+          if-no-files-found: error

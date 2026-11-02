@@ -1,0 +1,105 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:habitat-core-runtime-0.1.0",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "name": "habitat-runtime-core",
+      "version": "0.1.0",
+      "type": "application"
+    }
+  },
+  "components": [
+    {
+      "name": "node",
+      "version": "22.18.0",
+      "type": "application",
+      "license": "MIT",
+      "distribution": "core",
+      "included": true,
+      "source": "runtime bundle / Node.js"
+    },
+    {
+      "name": "jdk",
+      "version": "21.0.13+9-LTS",
+      "type": "application",
+      "license": "GPL-2.0-with-Classpath-exception",
+      "distribution": "core",
+      "included": true,
+      "source": "Temurin"
+    },
+    {
+      "name": "chrome-headless-shell",
+      "version": "156.0.8078.80",
+      "type": "application",
+      "license": "BSD-3-Clause",
+      "distribution": "media",
+      "included": true,
+      "source": "Google Chrome for Testing"
+    },
+    {
+      "name": "ffmpeg",
+      "version": "6.1.1-3ubuntu5",
+      "type": "application",
+      "license": "LGPL-2.1-or-later",
+      "distribution": "media",
+      "included": true,
+      "source": "Ubuntu FFmpeg"
+    },
+    {
+      "name": "sherpa-onnx",
+      "version": "2.0.1",
+      "type": "application",
+      "license": "Apache-2.0",
+      "distribution": "voice",
+      "included": false,
+      "source": "sherpa-onnx"
+    },
+    {
+      "name": "kokoro-multi-lang-v1_0",
+      "version": "1.0",
+      "type": "machine-learning-model",
+      "license": "Apache-2.0",
+      "distribution": "voice",
+      "included": false,
+      "source": "k2-fsa/sherpa-onnx"
+    },
+    {
+      "name": "@resvg/resvg-js",
+      "version": "2.6.2",
+      "type": "library",
+      "license": "Apache-2.0",
+      "distribution": "core-npm",
+      "included": true,
+      "source": "npm lockfile"
+    },
+    {
+      "name": "ws",
+      "version": "8.18.0",
+      "type": "library",
+      "license": "MIT",
+      "distribution": "core-npm",
+      "included": true,
+      "source": "npm lockfile"
+    },
+    {
+      "name": "NapCat",
+      "version": "4.18.37",
+      "type": "application",
+      "license": "see-upstream",
+      "distribution": "app",
+      "included": false,
+      "source": "NapNeko/NapCatQQ"
+    },
+    {
+      "name": "mcpfabric",
+      "version": "1.0.1",
+      "type": "application",
+      "license": "MIT",
+      "distribution": "app",
+      "included": false,
+      "source": "TLBtianhu/mcpfabric"
+    }
+  ]
+}

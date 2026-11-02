@@ -15,7 +15,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STAGE_ORIGIN = process.env.HABITAT_STAGE || 'http://127.0.0.1:9230';
 const VOICE_ORIGIN = process.env.HABITAT_VOICE || 'http://127.0.0.1:9270';
 
-const OWNER_TOKEN_PATH = '/etc/habitat/owner.token';
+const OWNER_TOKEN_PATH = process.env.HABITAT_OWNER_TOKEN_FILE || '/etc/habitat/owner.token';
 function ownerToken() {
   try { return fs.readFileSync(OWNER_TOKEN_PATH, 'utf8').trim(); } catch {
     const t = crypto.randomBytes(16).toString('hex');
@@ -26,7 +26,7 @@ function ownerToken() {
   }
 }
 const TOKEN = ownerToken();
-const AGENT_TOKEN_PATH = '/etc/habitat/agent.token';
+const AGENT_TOKEN_PATH = process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/agent.token';
 function agentToken() {
   try { return fs.readFileSync(AGENT_TOKEN_PATH, 'utf8').trim(); } catch {
     const t = crypto.randomBytes(16).toString('hex');

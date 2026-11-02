@@ -4,7 +4,9 @@ import fs from 'node:fs';
 const SUPERVISOR = process.env.HABITAT_OUTLET_URL || 'http://127.0.0.1:9272';
 const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
 const token = process.env.HABITAT_OUTLET_TOKEN || (() => {
-  const file = isRoot ? '/etc/habitat/owner.token' : '/etc/habitat/agent.token';
+  const file = isRoot
+    ? (process.env.HABITAT_OWNER_TOKEN_FILE || '/etc/habitat/owner.token')
+    : (process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/agent.token');
   return fs.readFileSync(file, 'utf8').trim();
 })();
 

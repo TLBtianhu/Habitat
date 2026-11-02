@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "bundle": "habitat-runtime-core",
+  "version": "0.1.0",
+  "platform": "linux-x64",
+  "source": "https://www.modelscope.cn/datasets/TLBtianhu/Habitat-Dist/resolve/master/runtime/habitat-runtime-core-0.1.0.tar.gz",
+  "sha256": "4dcc8b381c15f5bb82d083dd7a50d85104af91c4d4ace1db5a1d162879d740fb",
+  "sbom": "runtime/sbom.json",
+  "sbomSha256": "fccd3cbbed6503fa52c538db886c9a6f46728e0fe8bf00dc780fc2e9e0f47456",
+  "signature": {
+    "algorithm": "Ed25519",
+    "file": "runtime/lock.sig.json",
+    "publicKey": "runtime/release-public-key.pem"
+  },
+  "revocations": "runtime/revocations.json",
+  "components": [
+    {
+      "id": "node",
+      "version": "22.18.0",
+      "path": "node22/bin/node",
+      "sha256": "ccacb2d6d87ba6d118b2bffc1ae33747a05cc5fc6b1f1ec4fc1d420b687e952d",
+      "license": "MIT",
+      "required": true
+    },
+    {
+      "id": "jdk",
+      "version": "21.0.13+9-LTS",
+      "path": "jdk21/bin/java",
+      "sha256": "9cad3f2620d3ef2ed10b26f922af7e773d54fdaa05f615d6d6df014f3fec4155",
+      "license": "GPL-2.0-with-Classpath-exception",
+      "required": true
+    },
+    {
+      "id": "chrome",
+      "version": "156.0.8078.80",
+      "path": "chrome/chrome-headless-shell-linux64/chrome-headless-shell",
+      "sha256": "d34f5d1962280380a576c40cd50139f11d0ed0cfb17f69dad37e8cc8fd2b73fa",
+      "license": "BSD-3-Clause",
+      "required": true
+    },
+    {
+      "id": "ffmpeg",
+      "version": "6.1.1-3ubuntu5",
+      "path": "ffmpeg",
+      "sha256": "ed16af623947494a72e284b6eb8ff225f2da22b38b5d5069c2fd4b4ba3384e41",
+      "license": "LGPL-2.1-or-later",
+      "required": true
+    },
+    {
+      "id": "sherpa-onnx",
+      "version": "2.0.1",
+      "path": "tts-venv/bin/sherpa-onnx-offline-tts",
+      "sha256": "1e9dd21fff0f00b071a69bcebcebf49a95990509f470a5f72c0105c26e93a12a",
+      "license": "Apache-2.0",
+      "required": false
+    },
+    {
+      "id": "kokoro",
+      "version": "multi-lang-v1_0",
+      "source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",
+      "sha256": "60703707bc05ccd48d60e1eb723f38b07d6e474795a0b6a588d7220400e0f7a4",
+      "license": "Apache-2.0",
+      "required": false
+    }
+  ]
+}

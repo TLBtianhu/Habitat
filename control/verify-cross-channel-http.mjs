@@ -4,7 +4,11 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const OWNER = fs.readFileSync('/etc/habitat/owner.token', 'utf8').trim();
+const ownerFile = `/tmp/habitat-cross-owner-${process.pid}.token`;
+const agentFile = `/tmp/habitat-cross-agent-${process.pid}.token`;
+fs.writeFileSync(ownerFile, 'owner-test');
+fs.writeFileSync(agentFile, 'agent-test');
+const OWNER = fs.readFileSync(ownerFile, 'utf8').trim();
 const tasksFile = `/tmp/habitat-cross-http-tasks-${process.pid}.json`;
 const outboxFile = `/tmp/habitat-cross-http-outbox-${process.pid}.json`;
 const afterFile = `/tmp/habitat-cross-http-after-${process.pid}.jsonl`;
@@ -36,6 +40,8 @@ const proc = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', impo
     HABITAT_RESIDENCE_POLICY: policyFile,
     HABITAT_ONEBOT_HTTP_URL: 'http://127.0.0.1:3004',
     HABITAT_AFTER_ACTION_FILE: afterFile,
+    HABITAT_OWNER_TOKEN_FILE: ownerFile,
+    HABITAT_AGENT_TOKEN_FILE: agentFile,
   },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
@@ -82,5 +88,5 @@ try {
 } finally {
   proc.kill();
   fake.close();
-  for (const f of [tasksFile, outboxFile, policyFile, afterFile]) fs.rmSync(f, { force: true });
+  for (const f of [tasksFile, outboxFile, policyFile, afterFile, ownerFile, agentFile]) fs.rmSync(f, { force: true });
 }

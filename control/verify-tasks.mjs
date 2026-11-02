@@ -1,18 +1,23 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const PORT = 9242;
 const BASE = `http://127.0.0.1:${PORT}`;
 const FILE = `/tmp/habitat-control-tasks-test-${process.pid}.json`;
-const OWNER = fs.readFileSync('/etc/habitat/owner.token', 'utf8').trim();
-const entry = new URL('./server.mjs', import.meta.url).pathname;
+const ownerFile = `/tmp/habitat-tasks-owner-${process.pid}.token`;
+const agentFile = `/tmp/habitat-tasks-agent-${process.pid}.token`;
+fs.writeFileSync(ownerFile, 'owner-test');
+fs.writeFileSync(agentFile, 'agent-test');
+const OWNER = fs.readFileSync(ownerFile, 'utf8').trim();
+const entry = fileURLToPath(new URL('./server.mjs', import.meta.url));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let proc;
 
 async function start() {
   proc = spawn(process.execPath, [entry], {
-    env: { ...process.env, HABITAT_CONTROL_PORT: String(PORT), HABITAT_TASKS_FILE: FILE },
+    env: { ...process.env, HABITAT_CONTROL_PORT: String(PORT), HABITAT_TASKS_FILE: FILE, HABITAT_OWNER_TOKEN_FILE: ownerFile, HABITAT_AGENT_TOKEN_FILE: agentFile },
     stdio: 'ignore',
   });
   await sleep(350);
@@ -50,4 +55,6 @@ try {
 } finally {
   await stop();
   try { fs.rmSync(FILE, { force: true }); } catch {}
+  try { fs.rmSync(ownerFile, { force: true }); } catch {}
+  try { fs.rmSync(agentFile, { force: true }); } catch {}
 }

@@ -9,8 +9,8 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.HABITAT_OUTLET_PORT || 9272);
 const STATE_DIR = process.env.HABITAT_OUTLET_STATE_DIR || '/var/lib/habitat/outlets';
-const AGENT_TOKEN = fs.readFileSync('/etc/habitat/agent.token', 'utf8').trim();
-const OWNER_TOKEN = fs.readFileSync('/etc/habitat/owner.token', 'utf8').trim();
+const AGENT_TOKEN = fs.readFileSync(process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/agent.token', 'utf8').trim();
+const OWNER_TOKEN = fs.readFileSync(process.env.HABITAT_OWNER_TOKEN_FILE || '/etc/habitat/owner.token', 'utf8').trim();
 const RTMP_CONFIG = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/etc/habitat/bilibili-live.json';
 const entries = {
   hls: process.env.HABITAT_TEST_HLS_ENTRY || '../tools/wsl-pipeline-up.sh',
@@ -110,12 +110,19 @@ function start(name) {
   const existing = active.get(name);
   if (existing) return { accepted: false, already: true, ...publicInstance(existing) };
   const id = crypto.randomUUID();
-  const child = spawn('/usr/bin/env', ['bash', path.join(ROOT, entries[name])], {
-    cwd: path.join(ROOT, '..'),
-    stdio: 'ignore',
-    detached: false,
-    env: { ...process.env, FB_HLS: name === 'hls' ? '1' : '0' },
-  });
+  const child = process.env.HABITAT_TEST_CHILD_MODE === 'node'
+    ? spawn(process.execPath, [process.env.HABITAT_TEST_CHILD_FILE], {
+      cwd: path.join(ROOT, '..'),
+      stdio: 'ignore',
+      detached: false,
+      env: { ...process.env, FB_HLS: name === 'hls' ? '1' : '0' },
+    })
+    : spawn('/usr/bin/env', ['bash', path.join(ROOT, entries[name])], {
+      cwd: path.join(ROOT, '..'),
+      stdio: 'ignore',
+      detached: false,
+      env: { ...process.env, FB_HLS: name === 'hls' ? '1' : '0' },
+    });
   const instance = {
     id, name, child, state: 'starting', startedAt: Date.now(), stopRequested: false,
     exited: null, exitInfo: null,
