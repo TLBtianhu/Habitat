@@ -43,7 +43,7 @@ const proc = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', impo
     HABITAT_OWNER_TOKEN_FILE: ownerFile,
     HABITAT_AGENT_TOKEN_FILE: agentFile,
   },
-  stdio: ['ignore', 'pipe', 'pipe'],
+  stdio: ['ignore', 'inherit', 'inherit'],
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function post(path, body, owner = true) {
