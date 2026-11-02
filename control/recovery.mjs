@@ -9,9 +9,16 @@ import { ActionTracker } from '../agent/action-tracker.mjs';
 export class RecoveryManager {
   constructor({ file = process.env.HABITAT_LIFECYCLE_FILE || '/var/lib/habitat/lifecycle.json', episodeStore = null, afterAction = null, skillLibrary = null } = {}) {
     this.file = file;
-    this.episodeStore = episodeStore || new EpisodeStore({ root: process.env.HABITAT_EPISODE_DIR || '/var/lib/habitat/episodes' });
-    this.afterAction = afterAction || new AfterActionStore({ file: process.env.HABITAT_AFTER_ACTION_FILE || '/var/lib/habitat/after-action.jsonl' });
-    this.skillLibrary = skillLibrary || new SkillLibrary({ file: process.env.HABITAT_SKILL_LIBRARY || '/var/lib/habitat/skill-library.json' });
+    this.episodeStore = episodeStore;
+    this.afterAction = afterAction;
+    this.skillLibrary = skillLibrary;
+  }
+
+  _stores() {
+    if (!this.episodeStore) this.episodeStore = new EpisodeStore({ root: process.env.HABITAT_EPISODE_DIR || '/var/lib/habitat/episodes' });
+    if (!this.afterAction) this.afterAction = new AfterActionStore({ file: process.env.HABITAT_AFTER_ACTION_FILE || '/var/lib/habitat/after-action.jsonl' });
+    if (!this.skillLibrary) this.skillLibrary = new SkillLibrary({ file: process.env.HABITAT_SKILL_LIBRARY || '/var/lib/habitat/skill-library.json' });
+    return { episodeStore: this.episodeStore, afterAction: this.afterAction, skillLibrary: this.skillLibrary };
   }
 
   _read() {
@@ -32,7 +39,7 @@ export class RecoveryManager {
   }
 
   _pending() {
-    const episode = this.episodeStore.get(process.env.HABITAT_EPISODE_ID || 'live-current');
+    const episode = this._stores().episodeStore.get(process.env.HABITAT_EPISODE_ID || 'live-current');
     const counts = {};
     for (const write of episode?.pendingWrites || []) {
       if (!['pending', 'unknown', 'partial'].includes(write.status)) continue;
@@ -88,7 +95,7 @@ export class RecoveryManager {
 
   recover() {
     const before = this._pending();
-    const episode = this.episodeStore.get(process.env.HABITAT_EPISODE_ID || 'live-current');
+    const episode = this._stores().episodeStore.get(process.env.HABITAT_EPISODE_ID || 'live-current');
     if (!episode) return this._write({ ...this._read(), lastRecovery: { at: Date.now(), changed: 0, reason: 'no_episode' } });
     const tracker = new ActionTracker({
       episode,

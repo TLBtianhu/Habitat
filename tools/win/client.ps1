@@ -1,4 +1,4 @@
-# Habitat Windows 客户端：一个窗口完成 WSL 检测、启停与异常恢复。
+﻿# Habitat Windows 客户端：一个窗口完成 WSL 检测、启停与异常恢复。
 [CmdletBinding()]
 param([string]$Distro = 'Ubuntu')
 $ErrorActionPreference = 'Stop'

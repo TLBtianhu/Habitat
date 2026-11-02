@@ -1,4 +1,4 @@
-# Habitat Windows 生命周期：固定命令白名单，不执行用户输入的任意 WSL 命令。
+﻿# Habitat Windows 生命周期：固定命令白名单，不执行用户输入的任意 WSL 命令。
 $script:HabitatDistro = 'Ubuntu'
 
 function Get-HabitatNodePath {

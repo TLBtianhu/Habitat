@@ -1,4 +1,4 @@
-# Windows 生命周期离线验收：不依赖真实 WSL 或网络。
+﻿# Windows 生命周期离线验收：不依赖真实 WSL 或网络。
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'lifecycle.psm1') -Force
 

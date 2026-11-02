@@ -1,4 +1,4 @@
-# Habitat Windows 统一入口：客户端、启动、停止、状态和异常恢复共用同一生命周期模块。
+﻿# Habitat Windows 统一入口：客户端、启动、停止、状态和异常恢复共用同一生命周期模块。
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
