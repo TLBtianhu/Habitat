@@ -4,10 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { AgentLoop } from './agent-loop.mjs';
 import { OpenAIProvider, createLlmDecider } from './llm-provider.mjs';
-import { NativeMcClient } from '../clients/mc-native.mjs';
-import { loadMcpfabricToken } from '../clients/mcpfabric-token.mjs';
-import { SystemChatClient } from '../clients/system-chat.mjs';
 import { VoiceClient } from '../clients/voice.mjs';
+import { SystemChatClient } from '../clients/system-chat.mjs';
 import { Memory } from './memory.mjs';
 import { ResidenceMemoryStore } from './residence-memory-store.mjs';
 import { EpisodeStore } from './episode-store.mjs';
@@ -17,11 +15,9 @@ import { AppSessionManager } from './app-session.mjs';
 import { publishSessionSnapshot } from '../desktop/session-store.mjs';
 import { PluginInstaller } from '../control/plugin-installer.mjs';
 import { DurableEventPump } from './durable-event-pump.mjs';
-import { BiliConnectionSupervisor } from '../clients/bilibili-supervisor.mjs';
-import { OneBotConnectionSupervisor } from '../clients/onebot-supervisor.mjs';
-import { OneBotClient } from '../clients/onebot.mjs';
-import { loadChannelPolicy } from './residence-policy.mjs';
 import { ResidencePresence } from './residence-presence.mjs';
+import { InstalledPluginSupervisor } from './installed-plugin-supervisor.mjs';
+import { loadChannelPolicy } from './residence-policy.mjs';
 import { start as adapterStart, stop as adapterStop } from '../control/adapter-host.mjs';
 import { start as outletStart, stop as outletStop } from '../control/outlet-host.mjs';
 
@@ -29,22 +25,32 @@ const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const session = new AppSessionManager();
 const policy = loadChannelPolicy(process.env.HABITAT_RESIDENCE_POLICY || '/etc/habitat/residence-policy.json');
 let currentResidence = null;
-const client = new NativeMcClient({ token: loadMcpfabricToken() });
 const systemChat = new SystemChatClient();
 const voice = new VoiceClient();
-const onebotToken = String(process.env.NAPCAT_TOKEN || '').trim() || (
-  fs.existsSync('/etc/habitat/napcat.token') ? fs.readFileSync('/etc/habitat/napcat.token', 'utf8').trim() : ''
-);
-const onebotClient = new OneBotClient({ httpUrl: process.env.HABITAT_ONEBOT_HTTP_URL || 'http://127.0.0.1:3003', accessToken: onebotToken });
-const registry = new PluginInstaller({ cacheDir: process.env.HABITAT_PLUGIN_CACHE || '/var/lib/habitat/plugins' }).registry([
+const installer = new PluginInstaller({ cacheDir: process.env.HABITAT_PLUGIN_CACHE || '/var/lib/habitat/plugins' });
+const registry = installer.registry([
   path.join(APP_ROOT, 'adapters'),
   path.join(APP_ROOT, 'plugins'),
 ], {
   adapterHost: { start: adapterStart, stop: adapterStop },
   outletHost: { start: outletStart, stop: outletStop },
-  providerContext: { client, systemChat, voice, onebotClient, policy, getResidenceContext: () => currentResidence },
+  providerContext: { systemChat, voice, policy, getResidenceContext: () => currentResidence },
 });
 registry.openSessions(session);
+for (const id of ['mc', 'qq', 'bilibili']) {
+  if (!registry.list().some((item) => item.id === id)) continue;
+  try { await registry.start(id); }
+  catch (error) { console.log('plugin runtime degraded', id, error.message); }
+}
+const mcRuntime = registry.runtime('mc');
+const qqRuntime = registry.runtime('qq');
+const bilibiliRuntime = registry.runtime('bilibili');
+const pluginSupervisor = new InstalledPluginSupervisor({
+  installer,
+  registry,
+  onError: (error) => console.log('plugin state reconcile error', error.message),
+});
+pluginSupervisor.start();
 publishSessionSnapshot(session);
 
 function commit(result) {
@@ -61,28 +67,10 @@ const pump = new DurableEventPump({
 });
 await pump.start();
 
-let bilibili = null;
-const bilibiliRoomId = Number(process.env.HABITAT_BILIBILI_ROOM_ID || 0);
-if (bilibiliRoomId) {
-  const cookie = fs.existsSync('/etc/habitat/bilibili-cookies.txt')
-    ? fs.readFileSync('/etc/habitat/bilibili-cookies.txt', 'utf8').trim()
-    : (fs.existsSync('/etc/habitat/bilibili.json')
-      ? `SESSDATA=${JSON.parse(fs.readFileSync('/etc/habitat/bilibili.json', 'utf8')).sessdata}`
-      : '');
-  bilibili = new BiliConnectionSupervisor({ roomId: bilibiliRoomId, cookie });
-  await bilibili.start();
-}
-
-let onebot = null;
-const onebotUrl = process.env.HABITAT_ONEBOT_WS_URL || '';
-if (onebotUrl) {
-  onebot = new OneBotConnectionSupervisor({ wsUrl: onebotUrl, accessToken: onebotToken, policy });
-  await onebot.start();
-}
 const onebotStatusFile = '/var/lib/habitat/pump/onebot-status.json';
 function publishOnebotStatus() {
   fs.mkdirSync(path.dirname(onebotStatusFile), { recursive: true });
-  fs.writeFileSync(onebotStatusFile, JSON.stringify(onebot ? onebot.status() : { state: 'disabled' }), { mode: 0o600 });
+  fs.writeFileSync(onebotStatusFile, JSON.stringify(qqRuntime?.status() || { state: 'disabled', enabled: false }), { mode: 0o600 });
 }
 publishOnebotStatus();
 const onebotStatusTimer = setInterval(publishOnebotStatus, 5000);
@@ -99,21 +87,23 @@ function publishPresence() {
     lastSuccessAt: pumpStatus.lastSuccessAt,
     lastError: pumpStatus.lastError,
   });
-  if (onebot) {
-    const status = onebot.status();
+  if (qqRuntime) {
+    const status = qqRuntime.status();
     presence.update('qq', {
       channel: 'qq',
-      state: status.state === 'ready' ? 'online' : status.state === 'degraded' || status.state === 'connecting' ? 'degraded' : 'offline',
+      enabled: status.enabled !== false && !registry.isSuspended('qq'),
+      state: status.state === 'ready' ? 'online' : ['degraded', 'connecting', 'auth_required'].includes(status.state) ? 'degraded' : 'offline',
       lastEventAt: status.lastMessageAt,
       lastError: status.lastError,
       connectionId: status.connectionId,
     });
   }
-  if (bilibili) {
-    const status = bilibili.status();
+  if (bilibiliRuntime) {
+    const status = bilibiliRuntime.status();
     presence.update('bilibili', {
       channel: 'bilibili',
-      state: status.state === 'ready' ? 'online' : status.state === 'degraded' || status.state === 'connecting' ? 'degraded' : 'offline',
+      enabled: status.enabled !== false && !registry.isSuspended('bilibili'),
+      state: status.state === 'ready' ? 'online' : ['degraded', 'connecting'].includes(status.state) ? 'degraded' : 'offline',
       lastEventAt: status.lastMessageAt,
       lastError: status.lastError,
       connectionId: status.connectionId,
@@ -121,7 +111,7 @@ function publishPresence() {
   }
   presence.update('mc.world.current', {
     channel: 'mc',
-    enabled: process.env.HABITAT_MC_ENABLED !== '0',
+    enabled: Boolean(mcRuntime) && !registry.isSuspended('mc') && process.env.HABITAT_MC_ENABLED !== '0',
     state: lastMcObservation.available ? 'online' : 'offline',
     lastError: lastMcObservation.error || null,
   });
@@ -173,15 +163,16 @@ const currentEpisode = episodeStore.get(episodeId) || episodeStore.create({
   participants: ['system', 'mc.world.current'],
 });
 if (currentEpisode.status === 'paused') currentEpisode.resume();
-if (bilibiliRoomId) currentEpisode.addParticipant(`bilibili.room.${bilibiliRoomId}`);
+if (bilibiliRuntime?.roomId) currentEpisode.addParticipant(`bilibili.room.${bilibiliRuntime.roomId}`);
 episodeStore.save(currentEpisode);
 const contextAssembler = new ContextAssembler({ store: memory.store, episode: currentEpisode });
 const initiative = new Initiative({ quietMs: 30000, dailyQuota: 6 });
 const loop = new AgentLoop({ broker, decider, memory, initiative });
 
 async function readMcObservation() {
+  if (!mcRuntime || registry.isSuspended('mc')) return { available: false, error: 'mc_runtime_stopped' };
   try {
-    return { available: true, ...(await client.obs()) };
+    return { available: true, ...(await mcRuntime.obs()) };
   } catch (e) {
     return { available: false, error: e.message };
   }
@@ -203,8 +194,8 @@ async function tick() {
       Promise.resolve(pump.obs()), readMcObservation(), readVoiceProfiles(),
     ]);
     lastMcObservation = mc;
-    const bilibiliObs = bilibili?.obs() || { available: false, state: 'disabled', recent: [], new: [] };
-    const qqRaw = onebot?.obs() || { available: false, state: 'disabled', recent: [], new: [] };
+    const bilibiliObs = bilibiliRuntime?.obs() || { available: false, state: 'disabled', recent: [], new: [] };
+    const qqRaw = qqRuntime?.obs() || { available: false, state: 'disabled', recent: [], new: [] };
     // 每轮最多处理一个 QQ residence，防止跨群/私聊串上下文。
     const qqObs = { ...qqRaw, new: qqRaw.new.slice(0, 1) };
     currentResidence = qqObs.new[0] || (bilibiliObs.new[0] ? {
@@ -250,8 +241,8 @@ async function tick() {
     };
     const r = await loop.tick(obs);
     pump.complete(conversation.new.map((m) => m.id));
-    bilibili?.complete(bilibiliObs.new.map((e) => e.id));
-    onebot?.complete(qqObs.new.map((e) => e.id));
+    bilibiliRuntime?.complete(bilibiliObs.new.map((e) => e.id));
+    qqRuntime?.complete(qqObs.new.map((e) => e.id));
     if (r.acted) console.log('acted', r.intent.verb, r.intent.args);
   } catch (e) {
     console.log('tick error', e.message);
@@ -270,9 +261,12 @@ async function shutdown() {
   clearInterval(tickTimer);
   clearInterval(onebotStatusTimer);
   clearInterval(presenceTimer);
+  await pluginSupervisor.stop();
   await pump.stop();
-  await bilibili?.stop();
-  await onebot?.stop();
+  const runtimeStops = await registry.stopAll();
+  for (const result of runtimeStops) {
+    if (result.stopped === false) console.log('runtime stop failed', result.id, result.error);
+  }
   publishOnebotStatus();
   const deadline = Date.now() + 5000;
   while (ticking && Date.now() < deadline) {

@@ -64,7 +64,7 @@ curl http://127.0.0.1:9240/presence     # 各 residence 状态与整体聚合
 
 `qq.reply` 默认不对任何群或私聊自动发送。若只给某个群开启 addressed 回复，将 `config/residence-policy.example.json` 复制为 `/etc/habitat/residence-policy.json`，仅保留目标 residence，设置 `respond: "addressed"` 后重启 `habitat-agent`。目标由策略绑定，模型不能指定其他群或用户。
 
-安装签名插件必须通过主人控制面：`node tools/install-plugin.mjs qq`。Control 会验证索引签名、制品哈希、撤销状态和解包安全，普通模型或群消息不能安装。默认索引为 `https://raw.githubusercontent.com/TLBtianhu/habitat-plugins/master/index.json`，可用 `HABITAT_PLUGIN_INDEX_URL` 替换。插件停用、启用、撤销和卸载使用 `node tools/plugin-admin.mjs <disable|enable|revoke|unrevoke|uninstall> <plugin-id>`，停用/撤销后重启 AgentLoop 验证不再注册。
+安装签名插件必须通过主人控制面：`node tools/install-plugin.mjs qq`。Control 会验证索引签名、制品哈希、撤销状态和解包安全，普通模型或群消息不能安装。默认索引为 `https://github.com/TLBtianhu/habitat-plugins/releases/latest/download/index.json`，可用 `HABITAT_PLUGIN_INDEX_URL` 替换。插件停用、启用、撤销和卸载使用 `node tools/plugin-admin.mjs <disable|enable|revoke|unrevoke|uninstall> <plugin-id>`；停用/撤销会立即断开 runtime、取消重连并禁止工具调用，重启后状态仍保持。
 
 跨频道发言必须由主人创建并批准任务：先 `POST /tasks`，`type` 为 `cross_channel.message`，提供 `targetResidenceId` 和 `text`，再 `POST /tasks/<id>/approve`。执行前会再次检查目标策略和限频，outbox 防止重复发送。
 

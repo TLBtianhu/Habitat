@@ -14,11 +14,12 @@ const publicPem = publicKey.export({ type: 'spki', format: 'pem' });
 const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'adapters/qq/manifest.json'), 'utf8'));
 const artifactDir = path.join(cacheDir, 'artifact');
 fs.mkdirSync(artifactDir, { recursive: true });
-for (const rel of ['adapters/qq/manifest.json', 'adapters/qq/provider.mjs']) {
+for (const rel of ['adapters/qq/manifest.json', 'adapters/qq/provider.mjs', 'clients/onebot.mjs', 'clients/onebot-supervisor.mjs', 'agent/residence-policy.mjs']) {
   const dst = path.join(artifactDir, rel);
   fs.mkdirSync(path.dirname(dst), { recursive: true });
   fs.copyFileSync(path.join(ROOT, rel), dst);
 }
+fs.cpSync(path.join(ROOT, 'node_modules', 'ws'), path.join(artifactDir, 'node_modules', 'ws'), { recursive: true });
 const zipPath = path.join(cacheDir, 'app-qq.zip');
 execFileSync(process.platform === 'win32' ? 'tar.exe' : 'zip',
   process.platform === 'win32' ? ['-a', '-c', '-f', zipPath, '-C', artifactDir, '.'] : ['-qr', zipPath, '.'],
@@ -83,7 +84,12 @@ try {
   const registry = installer.registry([], {
     outboxFile: `${cacheDir}/outbox.json`,
     providerContext: {
-      onebotClient: { sendGroupMsg: async () => ({ message_id: 42 }) },
+      env: { HABITAT_ONEBOT_WS_URL: 'ws://test.invalid' },
+      onebotClientFactory: () => ({ sendGroupMsg: async () => ({ message_id: 42 }) }),
+      onebotSupervisorFactory: () => ({
+        start: async () => {}, stop: async () => {}, status: () => ({ state: 'ready' }),
+        obs: () => ({ available: true, recent: [], new: [] }), complete: () => {},
+      }),
       policy: { authorizeReply: () => ({ allowed: true, reason: 'owner_test' }), noteOutput: () => {} },
       getResidenceContext: () => ({ kind: 'group', peerId: '123', residenceId: 'qq.group.123' }),
     },

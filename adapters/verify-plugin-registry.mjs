@@ -9,6 +9,12 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const calls = { adapter: [], outlet: [], mc: [], chat: [], voice: [] };
 const outboxFile = `/tmp/habitat-plugin-outbox-${process.pid}.json`;
 const extendedOutboxFile = `/tmp/habitat-plugin-outbox-extended-${process.pid}.json`;
+const adapterFixture = `/tmp/habitat-adapter-fixture-${process.pid}`;
+fs.mkdirSync(path.join(adapterFixture, 'fixture'), { recursive: true });
+fs.writeFileSync(path.join(adapterFixture, 'fixture', 'manifest.json'), JSON.stringify({
+  schemaVersion: 1, id: 'fixture', kind: 'test', version: '1.0.0', lifecycle: 'adapter', entry: 'server.mjs', tools: [],
+}));
+fs.writeFileSync(path.join(adapterFixture, 'fixture', 'server.mjs'), '// adapter lifecycle test fixture\n');
 const client = {
   obs: async () => ({ mode: 'play' }),
   act: async ({ verb, args }) => { calls.mc.push({ verb, args }); return { ok: true, verb, args }; },
@@ -18,6 +24,7 @@ const voice = { speak: async (args) => { calls.voice.push(args); return { id: 10
 const registry = PluginRegistry.fromDirectories([
   path.join(root, 'adapters'),
   path.join(root, 'plugins'),
+  adapterFixture,
 ], {
   adapterHost: { start: (id) => calls.adapter.push(['start', id]), stop: (id) => calls.adapter.push(['stop', id]) },
   outletHost: { start: async (id) => { calls.outlet.push(['start', id]); return { accepted: true }; }, stop: async (id) => { calls.outlet.push(['stop', id]); return { stopped: true }; } },
@@ -46,8 +53,11 @@ await assert.rejects(() => registry.call('missing.tool', {}), /unknown tool/);
 
 await registry.start('hls');
 await registry.stop('hls');
+await registry.start('fixture');
+await registry.stop('fixture');
 await registry.start('bilibili');
 await registry.stop('bilibili');
+assert.ok(['disabled', 'stopped'].includes(registry.runtime('bilibili').status().state));
 await registry.start('qq');
 await registry.stop('qq');
 assert.deepEqual(calls.outlet.map((x) => x[0]), ['start', 'stop']);
@@ -72,4 +82,5 @@ assert.deepEqual((await extended.call('demo.ping', {})).pong, true);
 fs.rmSync(temp, { recursive: true, force: true });
 fs.rmSync(outboxFile, { force: true });
 fs.rmSync(extendedOutboxFile, { force: true });
+fs.rmSync(adapterFixture, { recursive: true, force: true });
 console.log('ok: manifest 驱动 AppSession、工具分发、生命周期、幂等与新增插件');

@@ -33,7 +33,7 @@
 node tools/install-plugin.mjs qq
 ```
 
-默认索引为 `https://raw.githubusercontent.com/TLBtianhu/habitat-plugins/master/index.json`。可用 `HABITAT_PLUGIN_INDEX_URL` 替换为镜像或私有签名索引，`HABITAT_PLUGIN_CACHE` 指定安装缓存。
+默认索引为 `https://github.com/TLBtianhu/habitat-plugins/releases/latest/download/index.json`。可用 `HABITAT_PLUGIN_INDEX_URL` 替换为镜像或私有签名索引，`HABITAT_PLUGIN_CACHE` 指定安装缓存。
 
 ## 边界
 

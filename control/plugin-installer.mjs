@@ -49,7 +49,7 @@ with zipfile.ZipFile(file) as z:
 }
 
 export class PluginInstaller {
-  constructor({ indexUrl = 'https://raw.githubusercontent.com/TLBtianhu/habitat-plugins/master/index.json', cacheDir = '/var/lib/habitat/plugins' } = {}) {
+  constructor({ indexUrl = 'https://github.com/TLBtianhu/habitat-plugins/releases/latest/download/index.json', cacheDir = '/var/lib/habitat/plugins' } = {}) {
     this.indexUrl = indexUrl;
     this.cacheDir = cacheDir;
   }

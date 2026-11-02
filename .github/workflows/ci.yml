@@ -41,6 +41,7 @@ jobs:
       - name: Plugin and protocol tests
         run: |
           node adapters/verify-plugin-registry.mjs
+          node adapters/verify-plugin-runtime.mjs
           node adapters/qq/verify-provider.mjs
           node clients/verify-onebot-supervisor.mjs
           node clients/verify-bilibili-supervisor.mjs

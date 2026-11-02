@@ -35,6 +35,10 @@ export class PluginRegistry {
     this.manifests = new Map();
     this.tools = new Map();
     this.providers = new Map();
+    this.providerModules = new Map();
+    this.runtimes = new Map();
+    this.suspended = new Set();
+    this.active = new Set();
     this.queues = new Map();
     this.outbox = outbox || new DurableOutbox({ file: outboxFile || process.env.HABITAT_OUTBOX || '/var/lib/habitat/outbox/agent.json' });
     this.adapterHost = adapterHost;
@@ -95,37 +99,110 @@ export class PluginRegistry {
 
   async start(id) {
     const m = this.get(id);
+    if (this.suspended.has(id)) throw new Error('plugin suspended: ' + id);
+    if (m.provider) {
+      await this.handlers(id);
+      const runtime = this.runtimes.get(id);
+      if (runtime) await runtime.start();
+      this.active.add(id);
+      return { accepted: true, lifecycle: m.lifecycle, id, status: runtime?.status?.() || { state: 'ready' } };
+    }
     if (m.lifecycle === 'adapter') {
       if (!this.adapterHost) throw new Error('adapter lifecycle unavailable: ' + id);
-      return this.adapterHost.start(id);
+      const result = await this.adapterHost.start(id);
+      this.active.add(id);
+      return result;
     }
     if (m.lifecycle === 'outlet') {
       if (!this.outletHost) throw new Error('outlet lifecycle unavailable: ' + id);
-      return this.outletHost.start(id);
+      const result = await this.outletHost.start(id);
+      this.active.add(id);
+      return result;
     }
     return { accepted: false, lifecycle: m.lifecycle, id };
   }
 
   async stop(id) {
     const m = this.get(id);
+    const runtime = this.runtimes.get(id);
+    if (runtime) {
+      await runtime.stop();
+      this.active.delete(id);
+      return { accepted: true, stopped: true, lifecycle: m.lifecycle, id, status: runtime.status?.() || { state: 'stopped' } };
+    }
     if (m.lifecycle === 'adapter') {
       if (!this.adapterHost) throw new Error('adapter lifecycle unavailable: ' + id);
-      return this.adapterHost.stop(id);
+      const result = await this.adapterHost.stop(id);
+      this.active.delete(id);
+      return result;
     }
     if (m.lifecycle === 'outlet') {
       if (!this.outletHost) throw new Error('outlet lifecycle unavailable: ' + id);
-      return this.outletHost.stop(id);
+      const result = await this.outletHost.stop(id);
+      this.active.delete(id);
+      return result;
     }
+    this.active.delete(id);
     return { accepted: false, lifecycle: m.lifecycle, id };
   }
 
+  async suspend(id) {
+    this.get(id);
+    this.suspended.add(id);
+    const stopped = await this.stop(id);
+    return { ...stopped, suspended: true, id };
+  }
+
+  async resume(id) {
+    this.get(id);
+    this.suspended.delete(id);
+    const started = await this.start(id);
+    return { ...started, suspended: false, id };
+  }
+
+  isSuspended(id) { return this.suspended.has(id); }
+  runtime(id) { return this.runtimes.get(id) || null; }
+
+  status(id) {
+    const m = this.get(id);
+    const runtime = this.runtimes.get(id);
+    return {
+      id,
+      version: m.version,
+      suspended: this.suspended.has(id),
+      active: this.active.has(id),
+      ...(runtime?.status?.() || { state: this.active.has(id) ? 'ready' : 'stopped' }),
+    };
+  }
+
+  async stopAll() {
+    const ids = new Set([...this.active, ...this.runtimes.keys()]);
+    const results = [];
+    for (const id of ids) {
+      if (!this.manifests.has(id)) continue;
+      try { results.push(await this.stop(id)); }
+      catch (error) { results.push({ id, stopped: false, error: error.message }); }
+    }
+    return results;
+  }
+
   async handlers(pluginId) {
+    if (this.suspended.has(pluginId)) throw new Error('plugin suspended: ' + pluginId);
     if (this.providers.has(pluginId)) return this.providers.get(pluginId);
     const m = this.get(pluginId);
     if (!m.provider) throw new Error('plugin has no provider: ' + pluginId);
     const module = await import(pathToFileURL(path.join(m.dir, m.provider)).href);
     if (typeof module.createHandlers !== 'function') throw new Error('provider must export createHandlers: ' + pluginId);
-    const handlers = await module.createHandlers(this.providerContext);
+    this.providerModules.set(pluginId, module);
+    let runtime = null;
+    if (typeof module.createRuntime === 'function') {
+      runtime = await module.createRuntime(this.providerContext);
+      if (!runtime || typeof runtime.start !== 'function' || typeof runtime.stop !== 'function' || typeof runtime.status !== 'function') {
+        throw new Error('invalid plugin runtime: ' + pluginId);
+      }
+      this.runtimes.set(pluginId, runtime);
+    }
+    const handlers = await module.createHandlers({ ...this.providerContext, runtime });
     if (!handlers || typeof handlers !== 'object') throw new Error('invalid handlers: ' + pluginId);
     this.providers.set(pluginId, handlers);
     return handlers;
@@ -133,9 +210,11 @@ export class PluginRegistry {
 
   async call(name, args = {}) {
     const tool = this.getTool(name);
+    if (this.suspended.has(tool.pluginId)) throw new Error('plugin suspended: ' + tool.pluginId);
     validateArgs(tool.inputSchema, args);
     const previous = this.queues.get(name) || Promise.resolve();
     const execute = async () => {
+      if (this.suspended.has(tool.pluginId)) throw new Error('plugin suspended: ' + tool.pluginId);
       const handlers = await this.handlers(tool.pluginId);
       const handler = handlers[tool.handler];
       if (typeof handler !== 'function') throw new Error(`handler not found: ${tool.pluginId}.${tool.handler}`);
@@ -168,6 +247,7 @@ export class PluginRegistry {
       lifecycle: m.lifecycle,
       session: m.session || null,
       tools: (m.tools || []).map((t) => t.name),
+      runtime: this.runtimes.has(m.id) ? this.status(m.id) : null,
       outbox: this.outbox.status(),
     }));
   }

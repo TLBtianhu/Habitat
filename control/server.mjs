@@ -87,7 +87,7 @@ const crossChannel = new CrossChannelTasks({
   afterAction: new AfterActionStore({ file: process.env.HABITAT_AFTER_ACTION_FILE || '/var/lib/habitat/after-action.jsonl' }),
 });
 const pluginInstaller = new PluginInstaller({
-  indexUrl: process.env.HABITAT_PLUGIN_INDEX_URL || 'https://raw.githubusercontent.com/TLBtianhu/habitat-plugins/master/index.json',
+  indexUrl: process.env.HABITAT_PLUGIN_INDEX_URL || 'https://github.com/TLBtianhu/habitat-plugins/releases/latest/download/index.json',
   cacheDir: process.env.HABITAT_PLUGIN_CACHE || '/var/lib/habitat/plugins',
 });
 const log = (...a) => console.log(new Date().toISOString(), ...a);

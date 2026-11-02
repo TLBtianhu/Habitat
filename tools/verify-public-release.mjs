@@ -27,6 +27,7 @@ if (process.env.HABITAT_CI !== '1' && fs.existsSync(path.join(ROOT, 'node_module
 let count = 0;
 (function walk(dir) {
   for (const name of fs.readdirSync(dir)) {
+    if (name === '.git' || name === '.tmp') continue;
     if (process.env.HABITAT_CI === '1' && name === 'node_modules') continue;
     const file = path.join(dir, name);
     const stat = fs.statSync(file);
