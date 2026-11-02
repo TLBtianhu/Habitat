@@ -55,8 +55,8 @@ async function post(path, body, owner = true) {
   return { status: r.status, body: await r.json() };
 }
 try {
-  for (let i = 0; i < 30; i++) {
-    try { await fetch('http://127.0.0.1:9243/status'); break; } catch { await sleep(100); }
+  for (let i = 0; i < 60; i++) {
+    try { await fetch('http://127.0.0.1:9243/status'); break; } catch { await sleep(200); }
   }
   const denied = await post('/tasks', { type: 'cross_channel.message', targetResidenceId: 'qq.group.123', text: 'hello' }, false);
   assert.equal(denied.status, 403);
