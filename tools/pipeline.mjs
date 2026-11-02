@@ -6,7 +6,7 @@ import path from 'node:path';
 const DESKTOP = process.env.FB_DESKTOP_URL || 'http://127.0.0.1:9260';
 const AUDIO = process.env.FB_AUDIO_URL || '';
 const AGENT_TOKEN = process.env.HABITAT_AGENT_TOKEN || (() => {
-  try { return fs.readFileSync('/etc/habitat/agent.token', 'utf8').trim(); } catch { return ''; }
+  try { return fs.readFileSync(process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/agent.token', 'utf8').trim(); } catch { return ''; }
 })();
 const OUT = process.env.FB_OUT || '/var/lib/habitat/artifacts/live.mp4';
 const RTMP = process.env.FB_RTMP || '';

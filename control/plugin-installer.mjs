@@ -54,6 +54,40 @@ export class PluginInstaller {
     this.cacheDir = cacheDir;
   }
 
+  _runtimeOwnership() {
+    if (typeof process.getuid !== 'function' || process.getuid() !== 0) return null;
+    fs.mkdirSync(this.cacheDir, { recursive: true });
+    const stat = fs.statSync(this.cacheDir);
+    return {
+      uid: process.env.HABITAT_PLUGIN_UID != null ? Number(process.env.HABITAT_PLUGIN_UID) : stat.uid,
+      gid: process.env.HABITAT_PLUGIN_GID != null ? Number(process.env.HABITAT_PLUGIN_GID) : stat.gid,
+    };
+  }
+
+  _writeOwned(file, content, mode = 0o600) {
+    fs.writeFileSync(file, content, { mode });
+    const owner = this._runtimeOwnership();
+    if (owner) fs.chownSync(file, owner.uid, owner.gid);
+  }
+
+  _prepareDir(dir) {
+    fs.mkdirSync(dir, { recursive: true });
+    const owner = this._runtimeOwnership();
+    if (owner) fs.chownSync(dir, owner.uid, owner.gid);
+  }
+
+  _ownTree(root) {
+    const owner = this._runtimeOwnership();
+    if (!owner) return;
+    const walk = (target) => {
+      fs.chownSync(target, owner.uid, owner.gid);
+      const stat = fs.lstatSync(target);
+      if (!stat.isDirectory()) return;
+      for (const name of fs.readdirSync(target)) walk(path.join(target, name));
+    };
+    walk(root);
+  }
+
   async _fetch(url, { buffer = false } = {}) {
     let lastError;
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -72,7 +106,7 @@ export class PluginInstaller {
     return buffer ? output : output.toString('utf8');
   }
 
-  async _index() {
+  async _index({ allowCache = true } = {}) {
     let indexText;
     let sigText;
     let publicKey;
@@ -81,6 +115,7 @@ export class PluginInstaller {
       sigText = await this._fetch(new URL('index.sig.json', this.indexUrl).href);
       publicKey = await this._fetch(new URL('release-public-key.pem', this.indexUrl).href);
     } catch (error) {
+      if (!allowCache) throw error;
       return this._cachedIndex(error);
     }
     const index = JSON.parse(indexText);
@@ -95,6 +130,7 @@ export class PluginInstaller {
       revocationsText = await this._fetch(revocationsUrl.href);
       revocationsSigText = await this._fetch(new URL('revocations.sig.json', revocationsUrl).href);
     } catch (error) {
+      if (!allowCache) throw error;
       return this._cachedIndex(error);
     }
     const revocations = JSON.parse(revocationsText);
@@ -103,7 +139,7 @@ export class PluginInstaller {
       throw new Error('plugin revocations signature invalid');
     }
     fs.mkdirSync(this.cacheDir, { recursive: true });
-    fs.writeFileSync(path.join(this.cacheDir, 'index-cache.json'), JSON.stringify({ index, sig, publicKey, revocations, revocationsSig, fetchedAt: Date.now() }), { mode: 0o600 });
+    this._writeOwned(path.join(this.cacheDir, 'index-cache.json'), JSON.stringify({ index, sig, publicKey, revocations, revocationsSig, fetchedAt: Date.now() }));
     return withRevocations(index, revocations);
   }
 
@@ -123,7 +159,7 @@ export class PluginInstaller {
 
   async install(id, { approvedBy = 'owner' } = {}) {
     if (approvedBy !== 'owner') throw new Error('owner approval required');
-    const index = await this._index();
+    const index = await this._index({ allowCache: false });
     const plugin = index.plugins.find((item) => item.id === id);
     if (!plugin) throw new Error('plugin not found: ' + id);
     if (plugin.revoked || this._revocationMatches({ id, version: plugin.version, hash: plugin.artifact.sha256 }) || matchesRevocation(index.revocationsData?.revoked, { id, version: plugin.version, hash: plugin.artifact.sha256 })) {
@@ -138,9 +174,9 @@ export class PluginInstaller {
     const downloadDir = path.join(this.cacheDir, 'downloads');
     const installedDir = path.join(this.cacheDir, 'installed', id);
     const staging = path.join(this.cacheDir, `.staging-${id}-${process.pid}`);
-    fs.mkdirSync(downloadDir, { recursive: true });
+    this._prepareDir(downloadDir);
     const archive = path.join(downloadDir, `app-${id}.zip`);
-    fs.writeFileSync(archive, bytes, { mode: 0o600 });
+    this._writeOwned(archive, bytes);
     fs.rmSync(staging, { recursive: true, force: true });
     fs.mkdirSync(staging, { recursive: true });
     extractZipSafe(archive, staging);
@@ -149,10 +185,11 @@ export class PluginInstaller {
     const manifest = validateManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), manifestPath);
     if (manifest.id !== id) throw new Error('plugin id mismatch in manifest');
     fs.rmSync(installedDir, { recursive: true, force: true });
-    fs.mkdirSync(path.dirname(installedDir), { recursive: true });
+    this._prepareDir(path.dirname(installedDir));
     fs.renameSync(staging, installedDir);
+    this._ownTree(installedDir);
     const metadata = { id, version: plugin.version, hash, installedAt: Date.now(), entry: plugin.entry, enabled: true };
-    fs.writeFileSync(path.join(this.cacheDir, 'installed', `${id}.install.json`), JSON.stringify(metadata, null, 2), { mode: 0o600 });
+    this._writeOwned(path.join(this.cacheDir, 'installed', `${id}.install.json`), JSON.stringify(metadata, null, 2));
     return metadata;
   }
 
@@ -192,7 +229,7 @@ export class PluginInstaller {
     const { file, data } = this._metadata(id);
     if (enabled && this._revocationMatches(data)) throw new Error('plugin revoked: ' + id);
     const next = { ...data, enabled, ...(enabled ? { enabledAt: Date.now() } : { disabledAt: Date.now() }) };
-    fs.writeFileSync(file, JSON.stringify(next, null, 2), { mode: 0o600 });
+    this._writeOwned(file, JSON.stringify(next, null, 2));
     return { ...next, revoked: this._revocationMatches(next) };
   }
 
@@ -203,14 +240,14 @@ export class PluginInstaller {
     const { data } = this._metadata(id);
     const file = path.join(this.cacheDir, 'revocations.json');
     const revoked = [...new Set([...this._localRevocations(), id])];
-    fs.writeFileSync(file, JSON.stringify({ schemaVersion: 1, revoked }, null, 2), { mode: 0o600 });
+    this._writeOwned(file, JSON.stringify({ schemaVersion: 1, revoked }, null, 2));
     return this._setEnabled(id, false);
   }
 
   unrevoke(id) {
     const file = path.join(this.cacheDir, 'revocations.json');
     const revoked = this._localRevocations().filter((entry) => entry !== id);
-    fs.writeFileSync(file, JSON.stringify({ schemaVersion: 1, revoked }, null, 2), { mode: 0o600 });
+    this._writeOwned(file, JSON.stringify({ schemaVersion: 1, revoked }, null, 2));
     return { id, revoked: this._cachedRevocations().includes(id), enabled: false };
   }
 

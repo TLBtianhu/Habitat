@@ -37,6 +37,6 @@ node tools/install-plugin.mjs qq
 
 ## 边界
 
-- 当前只支持本地安装与 Registry 加载，尚未实现自动更新和撤销后的自动停用；
-- HLS 因共享 Desktop/Audio 依赖仍不单独发布；
+- 安装/升级需要当前远程签名索引；撤销缓存用于离线禁用，运行中停用由 InstalledPluginSupervisor 立即执行；
+- HLS 自 ADR-018 起作为独立 outlet 插件发布，通过 Core capture 接口依赖 Desktop/Audio；
 - 插件许可独立于 Habitat 本体 MIT，安装不自动获得额外系统权限。

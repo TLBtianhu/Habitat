@@ -16,7 +16,7 @@ powershell -File tools/win/start-wsl.ps1
 systemctl start habitat-stage habitat-control habitat-desktop habitat-agent
 ```
 
-核心服务不包含 Outlet 编码进程。只有真正开播时才通过 Supervisor 启动 HLS 消费者：
+核心服务不包含 Outlet 编码进程。首次使用先由主人安装 `node tools/install-plugin.mjs hls`；安装不等于开播。只有真正开播时才通过 Supervisor 启动 HLS 消费者：
 
 ```bash
 systemctl start habitat-outlet-supervisor

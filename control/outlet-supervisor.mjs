@@ -5,6 +5,8 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { PluginInstaller } from './plugin-installer.mjs';
+import { resolveOutlet } from './outlet-resolver.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.HABITAT_OUTLET_PORT || 9272);
@@ -16,6 +18,7 @@ const entries = {
   hls: process.env.HABITAT_TEST_HLS_ENTRY || '../tools/wsl-pipeline-up.sh',
   rtmp: '../tools/wsl-rtmp-up.sh',
 };
+const pluginInstaller = new PluginInstaller({ cacheDir: process.env.HABITAT_PLUGIN_CACHE || '/var/lib/habitat/plugins' });
 const active = new Map();
 const history = new Map();
 fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -110,18 +113,26 @@ function start(name) {
   const existing = active.get(name);
   if (existing) return { accepted: false, already: true, ...publicInstance(existing) };
   const id = crypto.randomUUID();
-  const child = process.env.HABITAT_TEST_CHILD_MODE === 'node'
-    ? spawn(process.execPath, [process.env.HABITAT_TEST_CHILD_FILE], {
-      cwd: path.join(ROOT, '..'),
+  const target = resolveOutlet({
+    name,
+    root: ROOT,
+    entries,
+    pluginInstaller,
+    testNode: process.env.HABITAT_TEST_CHILD_MODE === 'node',
+    testFile: process.env.HABITAT_TEST_CHILD_FILE,
+  });
+  const child = target.node
+    ? spawn(process.execPath, [target.script], {
+      cwd: target.cwd,
       stdio: 'ignore',
       detached: false,
-      env: { ...process.env, FB_HLS: name === 'hls' ? '1' : '0' },
+      env: { ...process.env, HABITAT_NODE: process.execPath, FB_HLS: name === 'hls' ? '1' : '0' },
     })
-    : spawn('/usr/bin/env', ['bash', path.join(ROOT, entries[name])], {
-      cwd: path.join(ROOT, '..'),
+    : spawn('/usr/bin/env', ['bash', target.script], {
+      cwd: target.cwd,
       stdio: 'ignore',
       detached: false,
-      env: { ...process.env, FB_HLS: name === 'hls' ? '1' : '0' },
+      env: { ...process.env, HABITAT_NODE: process.execPath, FB_HLS: name === 'hls' ? '1' : '0' },
     });
   const instance = {
     id, name, child, state: 'starting', startedAt: Date.now(), stopRequested: false,

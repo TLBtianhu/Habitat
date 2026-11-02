@@ -54,6 +54,7 @@ jobs:
           node control/verify-plugin-admin-http.mjs
           node control/verify-tasks.mjs
           node control/verify-outlet-supervisor.mjs
+          node control/verify-outlet-resolver.mjs
       - name: Skill and phase tests
         run: |
           node --test --test-force-exit runtime/skill-runtime.test.mjs

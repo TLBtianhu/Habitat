@@ -1,4 +1,5 @@
 // AdapterManifest 的最小严格校验：声明、工具、权限和生命周期必须可对账。
+import path from 'node:path';
 const ID = /^[a-z][a-z0-9._-]{0,63}$/;
 const TOOL = /^[a-z][a-z0-9._-]*\.[a-z][a-z0-9._-]+$/;
 const LIFECYCLES = new Set(['adapter', 'provider', 'outlet', 'client', 'declarative']);
@@ -44,6 +45,12 @@ export function validateManifest(manifest, file = 'manifest.json') {
   }
   if (m.provider != null && (typeof m.provider !== 'string' || !m.provider.endsWith('.mjs'))) {
     fail(file, 'provider must be .mjs path');
+  }
+  if (m.entry != null && (typeof m.entry !== 'string' || !m.entry || path.isAbsolute(m.entry))) {
+    fail(file, 'entry must be a relative path');
+  }
+  if (m.lifecycle === 'outlet' && (typeof m.entry !== 'string' || !m.entry.endsWith('.sh'))) {
+    fail(file, 'outlet entry must be a relative .sh path');
   }
   if (m.tools != null && !Array.isArray(m.tools)) fail(file, 'tools must be array');
   const names = new Set();
