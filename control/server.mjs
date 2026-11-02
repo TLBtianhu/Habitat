@@ -10,6 +10,7 @@ import { OneBotClient } from '../clients/onebot.mjs';
 import { loadChannelPolicy } from '../agent/residence-policy.mjs';
 import { CrossChannelTasks } from './cross-channel.mjs';
 import { AfterActionStore } from '../agent/after-action.mjs';
+import { PluginInstaller } from './plugin-installer.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STAGE_ORIGIN = process.env.HABITAT_STAGE || 'http://127.0.0.1:9230';
@@ -84,6 +85,10 @@ const crossChannel = new CrossChannelTasks({
   onebotClient,
   outboxFile: process.env.HABITAT_CONTROL_OUTBOX || '/var/lib/habitat/outbox/control-tasks.json',
   afterAction: new AfterActionStore({ file: process.env.HABITAT_AFTER_ACTION_FILE || '/var/lib/habitat/after-action.jsonl' }),
+});
+const pluginInstaller = new PluginInstaller({
+  indexUrl: process.env.HABITAT_PLUGIN_INDEX_URL || 'https://raw.githubusercontent.com/TLBtianhu/habitat-plugins/master/index.json',
+  cacheDir: process.env.HABITAT_PLUGIN_CACHE || '/var/lib/habitat/plugins',
 });
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
@@ -312,6 +317,14 @@ http.createServer(async (req, res) => {
     t.decidedAt = Date.now();
     persistTasks();
     return json(res, 200, t);
+  }
+
+  if (req.method === 'GET' && url.pathname === '/plugins/index') return json(res, 200, pluginInstaller.installed());
+  if (req.method === 'POST' && url.pathname === '/plugins/install') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    const p = await readJson(req);
+    try { return json(res, 200, await pluginInstaller.install(p.id, { approvedBy: 'owner' })); }
+    catch (e) { return json(res, 400, { error: e.message }); }
   }
 
   if (req.method === 'POST' && url.pathname === '/adapters/start') {

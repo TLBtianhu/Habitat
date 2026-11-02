@@ -49,6 +49,7 @@ jobs:
         run: |
           node control/verify-cross-channel.mjs
           node control/verify-cross-channel-http.mjs
+          node control/verify-plugin-installer.mjs
           node control/verify-tasks.mjs
           node control/verify-outlet-supervisor.mjs
       - name: Skill and phase tests
