@@ -30,6 +30,7 @@ display/
 **/after-action.jsonl
 **/world-server/
 **/hls/
+!plugins/hls/**
 **/cache/
 **/coverage/
 stage/diagnostics.json
