@@ -5,7 +5,13 @@ $payloadRoot = Join-Path $root 'dist\win'
 $package = Join-Path $payloadRoot 'payload\fishbowl-v0.1.zip'
 $setupExe = Join-Path $payloadRoot 'tools\win\HabitatSetup.exe'
 $setupScript = Join-Path $payloadRoot 'tools\win\setup.ps1'
-$linuxHome = (wsl -d Ubuntu -- bash -lc 'printf %s "$HOME"').Trim()
+$defaultWslUser = (wsl -d Ubuntu -- whoami).Trim()
+if ($defaultWslUser -eq 'root') {
+  wsl -d Ubuntu -u root -- bash -lc "id -u habitat >/dev/null 2>&1 || useradd -m habitat"
+  $linuxHome = '/home/habitat'
+} else {
+  $linuxHome = (wsl -d Ubuntu -- bash -lc 'printf %s "$HOME"').Trim()
+}
 $installRoot = "$linuxHome/.local/share/habitat-test"
 $env:HABITAT_INSTALL_ROOT = $installRoot
 $clientDir = Join-Path $root '.tmp\setup-client'

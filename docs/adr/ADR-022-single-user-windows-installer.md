@@ -6,7 +6,7 @@
 
 - `HabitatSetup.exe`：只调用受控安装脚本，安装/升级/回滚/卸载；
 - `HabitatConsole.exe`：打开现有 Windows 客户端，不承载 AgentLoop 或推流；
-- 应用安装在 WSL 当前用户的独立实例目录，开发 `/opt/habitat`、便携版与安装版互不覆盖；
+- 应用安装在 WSL 当前用户的独立实例目录，开发 `/opt/habitat`、便携版与安装版互不覆盖；WSL 默认 root 时仅首次创建非 root `habitat` 用户，后续安装命令全部使用该用户；
 - staging → 必需文件校验 → 原子替换，失败恢复旧 app/runtime；
 - 从 `runtime/lock.json` 读取固定源与哈希，先引导 Node，再执行完整 lock/SBOM/组件校验；
 - 已验证 runtime 归档可复用，升级不静默替换为系统 Node/JDK/npm/pip；

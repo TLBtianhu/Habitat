@@ -1,4 +1,4 @@
-﻿# Habitat 用户态安装器：默认不提权，应用/数据/配置独立，不修改全局 WSL 配置。
+﻿# Habitat 用户态安装器：应用/数据/配置独立，默认非 root；仅默认 root 的 WSL 首次创建非 root 用户，不修改全局 WSL 配置。
 param(
   [Parameter(Mandatory=$true)][string]$PackagePath,
   [string]$InstallRoot = '',
@@ -7,8 +7,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$script:WslUser = (wsl -d Ubuntu -- whoami).Trim()
+if ($script:WslUser -eq 'root') {
+  wsl -d Ubuntu -u root -- bash -lc "id -u habitat >/dev/null 2>&1 || useradd -m habitat"
+  if ($LASTEXITCODE -ne 0) { throw '无法创建非 root Habitat 用户' }
+  $script:WslUser = 'habitat'
+}
 $PackagePath = (Resolve-Path $PackagePath).Path
-$linuxHome = (wsl -d Ubuntu -- bash -lc 'printf %s "$HOME"').Trim()
+$linuxHome = (wsl -d Ubuntu -u $script:WslUser -- bash -lc 'printf %s "$HOME"').Trim()
 if ([string]::IsNullOrWhiteSpace($linuxHome)) { throw '无法确定 WSL 用户 home' }
 if ([string]::IsNullOrWhiteSpace($InstallRoot)) { $InstallRoot = "$linuxHome/.local/share/habitat" }
 $InstallRoot = $InstallRoot.TrimEnd('/')
@@ -37,9 +43,9 @@ try {
   $payload = Join-Path $tmp 'Fishbowl'
   if (-not (Test-Path $payload)) { $payload = $tmp }
   $wslTmp = '/mnt/' + $payload.Substring(0, 1).ToLower() + $payload.Substring(2).Replace('\', '/')
-  wsl -d Ubuntu -- bash -lc "mkdir -p '$InstallRoot/app' '$InstallRoot/data' '$InstallRoot/config'"
-  wsl -d Ubuntu -- bash -lc "cp -a '$wslTmp'/. '$InstallRoot/app/'"
-  wsl -d Ubuntu -- bash -lc "chmod -R u+rwX,go+rX,go-w '$InstallRoot/app'; chmod -R u+rwX,go-rwx '$InstallRoot/data' '$InstallRoot/config'"
+  wsl -d Ubuntu -u $script:WslUser -- bash -lc "mkdir -p '$InstallRoot/app' '$InstallRoot/data' '$InstallRoot/config'"
+  wsl -d Ubuntu -u $script:WslUser -- bash -lc "cp -a '$wslTmp'/. '$InstallRoot/app/'"
+  wsl -d Ubuntu -u $script:WslUser -- bash -lc "chmod -R u+rwX,go+rX,go-w '$InstallRoot/app'; chmod -R u+rwX,go-rwx '$InstallRoot/data' '$InstallRoot/config'"
 
   if ($RuntimeUrl) {
     if ([string]::IsNullOrWhiteSpace($RuntimeSha256)) { throw 'RuntimeUrl 必须同时提供 RuntimeSha256' }
@@ -48,18 +54,18 @@ try {
       throw 'RuntimeUrl 只允许 HTTPS 的官方/镜像源'
     }
     $needDownload = $true
-    $archiveExists = (wsl -d Ubuntu -- bash -lc "test -f '$InstallRoot/data/runtime.tar.gz' && printf yes || printf no").Trim()
+    $archiveExists = (wsl -d Ubuntu -u $script:WslUser -- bash -lc "test -f '$InstallRoot/data/runtime.tar.gz' && printf yes || printf no").Trim()
     if ($archiveExists -eq 'yes') {
-      $existing = (wsl -d Ubuntu -- bash -lc "sha256sum '$InstallRoot/data/runtime.tar.gz' | cut -d' ' -f1").Trim()
+      $existing = (wsl -d Ubuntu -u $script:WslUser -- bash -lc "sha256sum '$InstallRoot/data/runtime.tar.gz' | cut -d' ' -f1").Trim()
       if ($existing -eq $RuntimeSha256) { $needDownload = $false }
     }
     if ($needDownload) {
-      wsl -d Ubuntu -- bash -lc "mkdir -p '$InstallRoot/data' && curl --fail --location --proto '=https' '$RuntimeUrl' -o '$InstallRoot/data/runtime.tar.gz'"
+      wsl -d Ubuntu -u $script:WslUser -- bash -lc "mkdir -p '$InstallRoot/data' && curl --fail --location --proto '=https' '$RuntimeUrl' -o '$InstallRoot/data/runtime.tar.gz'"
       if ($LASTEXITCODE -ne 0) { throw '运行时下载失败' }
     }
-    wsl -d Ubuntu -- bash -lc "printf '%s  %s\n' '$RuntimeSha256' '$InstallRoot/data/runtime.tar.gz' | sha256sum -c -"
+    wsl -d Ubuntu -u $script:WslUser -- bash -lc "printf '%s  %s\n' '$RuntimeSha256' '$InstallRoot/data/runtime.tar.gz' | sha256sum -c -"
     if ($LASTEXITCODE -ne 0) { throw '运行时 SHA256 校验失败' }
-    $entries = wsl -d Ubuntu -- bash -lc "tar -tzf '$InstallRoot/data/runtime.tar.gz'"
+    $entries = wsl -d Ubuntu -u $script:WslUser -- bash -lc "tar -tzf '$InstallRoot/data/runtime.tar.gz'"
     if ($entries.Count -gt 20000) { throw '运行时文件数过多' }
     foreach ($name in $entries) {
       $normalized = $name.Replace('\', '/')
@@ -83,11 +89,12 @@ tar -tvzf "$runtime/data/runtime.tar.gz" | while IFS= read -r line; do
 done
 '@
     $linkScript = Join-Path $tmp 'runtime-links.sh'
+    $linkCheck = $linkCheck.Replace("`r`n", "`n")
     [System.IO.File]::WriteAllText($linkScript, $linkCheck, (New-Object System.Text.UTF8Encoding($false)))
     $wslScript = '/mnt/' + $linkScript.Substring(0, 1).ToLower() + $linkScript.Substring(2).Replace('\', '/')
-    wsl -d Ubuntu -- bash $wslScript $InstallRoot
+    wsl -d Ubuntu -u $script:WslUser -- bash $wslScript $InstallRoot
     if ($LASTEXITCODE -ne 0) { throw '运行时链接校验失败' }
-    wsl -d Ubuntu -- bash -lc "mkdir -p '$InstallRoot/runtime' && tar -xzf '$InstallRoot/data/runtime.tar.gz' -C '$InstallRoot/runtime' && HABITAT_RUNTIME_ARCHIVE='$InstallRoot/data/runtime.tar.gz' '$InstallRoot/runtime/node22/bin/node' '$InstallRoot/app/tools/fetch-runtime.mjs' '$InstallRoot/runtime'"
+    wsl -d Ubuntu -u $script:WslUser -- bash -lc "mkdir -p '$InstallRoot/runtime' && tar -xzf '$InstallRoot/data/runtime.tar.gz' -C '$InstallRoot/runtime' && HABITAT_RUNTIME_ARCHIVE='$InstallRoot/data/runtime.tar.gz' '$InstallRoot/runtime/node22/bin/node' '$InstallRoot/app/tools/fetch-runtime.mjs' '$InstallRoot/runtime'"
     if ($LASTEXITCODE -ne 0) { throw '运行时 lock/SBOM/组件验收失败' }
   } else {
     Write-Output '未提供 RuntimeUrl：应用层已安装，运行时需另行按 manifest 校验安装'

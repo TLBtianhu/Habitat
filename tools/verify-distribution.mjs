@@ -17,7 +17,9 @@ for (const forbidden of ['tools/bridge.mjs', 'display/server.mjs']) {
 
 const installer = fs.readFileSync(path.join(root, 'tools/install-user.ps1'), 'utf8');
 assert.ok(installer.includes('.local/share/habitat'));
-assert.equal(installer.includes('-u root'), false);
+assert.ok(installer.includes('useradd -m habitat'));
+assert.ok(installer.includes('-u $script:WslUser'));
+assert.equal(installer.includes('wsl -d Ubuntu -u root -- systemctl'), false);
 assert.ok(installer.includes('RuntimeSha256'));
 assert.ok(installer.includes('fetch-runtime.mjs'));
 const installMjs = fs.readFileSync(path.join(root, 'tools/install.mjs'), 'utf8');

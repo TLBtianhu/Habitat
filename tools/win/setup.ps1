@@ -16,12 +16,18 @@ param(
   [switch]$SimulateFailure
 )
 $ErrorActionPreference = 'Stop'
+$script:WslUser = (wsl -d Ubuntu -- whoami).Trim()
+if ($script:WslUser -eq 'root') {
+  wsl -d Ubuntu -u root -- bash -lc "id -u habitat >/dev/null 2>&1 || useradd -m habitat"
+  if ($LASTEXITCODE -ne 0) { throw '无法创建非 root Habitat 用户' }
+  $script:WslUser = 'habitat'
+}
 if ($env:HABITAT_CLIENT_DIR) { $ClientDir = $env:HABITAT_CLIENT_DIR }
 if ($env:HABITAT_REGISTRY_ROOT) { $RegistryRoot = $env:HABITAT_REGISTRY_ROOT }
 if ($env:HABITAT_UNINSTALL_KEY) { $UninstallKey = $env:HABITAT_UNINSTALL_KEY }
 if ($env:HABITAT_PROTOCOL_ROOT) { $ProtocolRoot = $env:HABITAT_PROTOCOL_ROOT }
 if ($env:HABITAT_START_MENU_DIR) { $StartMenuDir = $env:HABITAT_START_MENU_DIR }
-$linuxHome = (wsl -d Ubuntu -- bash -lc 'printf %s "$HOME"').Trim()
+$linuxHome = (wsl -d Ubuntu -u $script:WslUser -- bash -lc 'printf %s "$HOME"').Trim()
 if (-not $linuxHome) { throw '无法确定 WSL 用户 home' }
 if (-not $InstallRoot) { $InstallRoot = "$linuxHome/.local/share/habitat" }
 $InstallRoot = $InstallRoot.TrimEnd('/')
@@ -71,7 +77,7 @@ if ($Action -eq 'status') {
 
 if ($Action -eq 'uninstall') {
   if (Test-Path $ClientDir) { Remove-Item -LiteralPath $ClientDir -Recurse -Force }
-  wsl -d Ubuntu -- bash -lc "rm -rf -- '$InstallRoot/app' '$InstallRoot/runtime'"
+  wsl -d Ubuntu -u $script:WslUser -- bash -lc "rm -rf -- '$InstallRoot/app' '$InstallRoot/runtime'"
   if ($LASTEXITCODE -ne 0) { throw '卸载应用目录失败；数据已保留' }
   Remove-Item -Path $RegistryRoot -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -Path $UninstallKey -Recurse -Force -ErrorAction SilentlyContinue
@@ -93,24 +99,24 @@ $PackagePath = (Resolve-Path $PackagePath).Path
 $staging = "$InstallRoot/.staging-$([guid]::NewGuid().ToString('N'))"
 $backup = "$InstallRoot/.backup-$([guid]::NewGuid().ToString('N'))"
 $swapped = $false
-wsl -d Ubuntu -- bash -lc "mkdir -p '$staging/data' && if [ -f '$InstallRoot/data/runtime.tar.gz' ]; then cp '$InstallRoot/data/runtime.tar.gz' '$staging/data/runtime.tar.gz'; fi"
+wsl -d Ubuntu -u $script:WslUser -- bash -lc "mkdir -p '$staging/data' && if [ -f '$InstallRoot/data/runtime.tar.gz' ]; then cp '$InstallRoot/data/runtime.tar.gz' '$staging/data/runtime.tar.gz'; fi"
 try {
   & (Join-Path $PSScriptRoot 'install-user.ps1') -PackagePath $PackagePath -InstallRoot $staging -RuntimeUrl $RuntimeUrl -RuntimeSha256 $RuntimeSha256
   foreach ($required in @('agent/run-continuous.mjs', 'tools/win/client.ps1', 'tools/lifecycle.mjs')) {
-    wsl -d Ubuntu -- bash -lc "test -f '$staging/app/$required'"
+    wsl -d Ubuntu -u $script:WslUser -- bash -lc "test -f '$staging/app/$required'"
     if ($LASTEXITCODE -ne 0) { throw "安装包缺少 $required" }
   }
-  wsl -d Ubuntu -- bash -lc "mkdir -p '$backup' && if [ -d '$InstallRoot/app' ]; then mv '$InstallRoot/app' '$backup/app'; fi && if [ -d '$InstallRoot/runtime' ]; then mv '$InstallRoot/runtime' '$backup/runtime'; fi && mv '$staging/app' '$InstallRoot/app' && if [ -d '$staging/runtime' ]; then mv '$staging/runtime' '$InstallRoot/runtime'; fi"
+  wsl -d Ubuntu -u $script:WslUser -- bash -lc "mkdir -p '$backup' && if [ -d '$InstallRoot/app' ]; then mv '$InstallRoot/app' '$backup/app'; fi && if [ -d '$InstallRoot/runtime' ]; then mv '$InstallRoot/runtime' '$backup/runtime'; fi && mv '$staging/app' '$InstallRoot/app' && if [ -d '$staging/runtime' ]; then mv '$staging/runtime' '$InstallRoot/runtime'; fi"
   if ($LASTEXITCODE -ne 0) { throw '应用目录切换失败' }
   $swapped = $true
   if ($SimulateFailure) { throw '模拟健康检查失败' }
-  wsl -d Ubuntu -- bash -lc "mkdir -p '$InstallRoot/data' '$InstallRoot/config' && chmod -R u+rwX,go-rwx '$InstallRoot/data' '$InstallRoot/config'"
+  wsl -d Ubuntu -u $script:WslUser -- bash -lc "mkdir -p '$InstallRoot/data' '$InstallRoot/config' && chmod -R u+rwX,go-rwx '$InstallRoot/data' '$InstallRoot/config'"
   if ($LASTEXITCODE -ne 0) { throw '无法创建正式数据/配置目录' }
   Register-Client
 } catch {
-  wsl -d Ubuntu -- bash -lc "rm -rf '$InstallRoot/app' '$InstallRoot/runtime' && if [ -d '$backup/app' ]; then mv '$backup/app' '$InstallRoot/app'; fi && if [ -d '$backup/runtime' ]; then mv '$backup/runtime' '$InstallRoot/runtime'; fi"
-  wsl -d Ubuntu -- bash -lc "rm -rf '$staging' '$backup'"
+  wsl -d Ubuntu -u $script:WslUser -- bash -lc "rm -rf '$InstallRoot/app' '$InstallRoot/runtime' && if [ -d '$backup/app' ]; then mv '$backup/app' '$InstallRoot/app'; fi && if [ -d '$backup/runtime' ]; then mv '$backup/runtime' '$InstallRoot/runtime'; fi"
+  wsl -d Ubuntu -u $script:WslUser -- bash -lc "rm -rf '$staging' '$backup'"
   throw
 }
-wsl -d Ubuntu -- bash -lc "rm -rf '$staging' '$backup'"
+wsl -d Ubuntu -u $script:WslUser -- bash -lc "rm -rf '$staging' '$backup'"
 Write-Output "Habitat $Version 已安装；应用、数据、配置与开发目录隔离"
