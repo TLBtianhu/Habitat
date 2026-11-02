@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>Fishbowl · CODE</title>
+<link rel="stylesheet" href="vendor/xterm/xterm.css" />
+<style>
+  :root { --bg:#0b0d12; --panel:#10151f; --line:#223047; --ink:#cfd8ef; --dim:#6b7897; --accent:#6ea8ff; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family: system-ui, "Microsoft YaHei", sans-serif; }
+  #app { display:grid; grid-template-rows:48px 1fr 190px; width:1280px; height:720px; }
+  header { display:flex; align-items:center; gap:18px; padding:0 18px; border-bottom:1px solid var(--line); background:var(--panel); }
+  header b { font-size:16px; letter-spacing:1px; }
+  .pill { font-size:12px; padding:3px 10px; border-radius:999px; border:1px solid var(--line); color:var(--dim); }
+  .pill.live { color:#7ee787; border-color:#2d6a3f; }
+  .pill.editing { color:#79c0ff; border-color:#2f5f9e; }
+  .pill.testing { color:#ffb454; border-color:#8a5a1a; }
+  .pill.rollback { color:#ff7b8a; border-color:#8a2a36; }
+  #gen { margin-left:auto; color:var(--dim); font-size:12px; }
+  main { display:grid; grid-template-columns:190px 1fr 310px; min-height:0; }
+  #tree { border-right:1px solid var(--line); background:#0d121b; padding:14px 10px; font:13px ui-monospace, Consolas, monospace; color:var(--dim); }
+  #tree .dir { color:#9fb0d0; margin:8px 0 4px; }
+  #tree .file { color:#dbe6ff; margin-left:10px; }
+  #editor { min-width:0; min-height:0; }
+  #side { border-left:1px solid var(--line); background:var(--panel); padding:14px; overflow:auto; }
+  #side h3 { margin:0 0 10px; font-size:13px; color:#9fb0d0; font-weight:600; }
+  .kv { display:flex; justify-content:space-between; font-size:12px; margin:7px 0; color:var(--dim); }
+  .kv b { color:#dbe6ff; font-weight:500; }
+  .test { display:flex; gap:8px; align-items:center; font-size:12px; margin:8px 0; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#7ee787; }
+  .dot.running { background:#ffb454; }
+  footer { border-top:1px solid var(--line); background:#070a10; }
+  #term { height:190px; padding:6px 10px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <b>FISHBOWL · CODE</b>
+    <span id="artifact" class="pill">chop-tree</span>
+    <span id="status" class="pill live">live</span>
+    <span id="version" class="pill">1.0.0</span>
+    <span id="gen">generation 1</span>
+  </header>
+  <main>
+    <div id="tree">
+      <div class="dir">skills/</div>
+      <div class="dir">└─ chop-tree/</div>
+      <div class="file">index.mjs</div>
+      <div class="dir" style="margin-top:16px">events/</div>
+      <div id="eventNote" style="margin-top:8px;line-height:1.6">等待代码事件…</div>
+    </div>
+    <div id="editor"></div>
+    <div id="side">
+      <h3>Artifact</h3>
+      <div class="kv"><span>id</span><b id="aid">chop-tree</b></div>
+      <div class="kv"><span>version</span><b id="aver">1.0.0</b></div>
+      <div class="kv"><span>generation</span><b id="agen">1</b></div>
+      <div class="kv"><span>cursor</span><b id="cur">4:1</b></div>
+      <h3 style="margin-top:18px">Tests</h3>
+      <div id="tests"></div>
+    </div>
+  </main>
+  <footer><div id="term"></div></footer>
+</div>
+
+<script src="vendor/xterm/xterm.js"></script>
+<script src="vendor/monaco/vs/loader.js"></script>
+<script>
+const statusEl = document.getElementById('status');
+const term = new Terminal({ fontSize: 13, rows: 10, cols: 120 });
+term.open(document.getElementById('term'));
+let editor = null;
+let lastContent = '';
+let lastTermCount = 0;
+
+require.config({ paths: { vs: 'vendor/monaco/vs' } });
+require(['vs/editor/editor.main'], () => {
+  editor = monaco.editor.create(document.getElementById('editor'), {
+    value: '// 等待代码事件…\n',
+    language: 'javascript',
+    theme: 'vs-dark',
+    readOnly: true,
+    minimap: { enabled: false },
+    fontSize: 17,
+    scrollBeyondLastLine: false,
+    automaticLayout: true,
+    renderWhitespace: 'none',
+  });
+});
+
+function apply(s) {
+  if (!s || !s.content) return;
+  if (editor && s.content !== lastContent) {
+    editor.setValue(s.content);
+    lastContent = s.content;
+  }
+  document.getElementById('artifact').textContent = s.artifact;
+  document.getElementById('version').textContent = s.version;
+  document.getElementById('gen').textContent = 'generation ' + s.generation;
+  document.getElementById('aid').textContent = s.artifact;
+  document.getElementById('aver').textContent = s.version;
+  document.getElementById('agen').textContent = s.generation;
+  document.getElementById('cur').textContent = `${s.cursor.line}:${s.cursor.col}`;
+  statusEl.textContent = s.status;
+  statusEl.className = 'pill ' + s.status;
+  const tests = document.getElementById('tests');
+  tests.innerHTML = '';
+  for (const t of s.tests || []) {
+    const d = document.createElement('div');
+    d.className = 'test';
+    d.innerHTML = `<span class="dot ${t.status === 'running' ? 'running' : ''}"></span><span>${t.name}</span>`;
+    tests.appendChild(d);
+  }
+  document.getElementById('eventNote').textContent =
+    `v${s.version} · gen ${s.generation} · ${s.status}`;
+  const lines = s.terminal || [];
+  if (lines.length !== lastTermCount) {
+    term.clear();
+    for (const line of lines) term.writeln(line);
+    lastTermCount = lines.length;
+  }
+}
+
+async function pull() {
+  try {
+    const r = await fetch('http://127.0.0.1:9225/code');
+    if (r.ok) apply(await r.json());
+  } catch {}
+  setTimeout(pull, 400);
+}
+pull();
+</script>
+</body>
+</html>

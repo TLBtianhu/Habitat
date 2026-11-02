@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>Habitat 诊断</title>
+<style>
+  body { margin:0; background:#0b0f14; color:#e6edf7; font-family:Inter,"Noto Sans SC",sans-serif; }
+  #wrap { width:1280px; margin:0 auto; padding:32px 40px; }
+  h1 { font-size:24px; margin:0 0 8px; }
+  .sub { color:#94a3b8; margin-bottom:24px; }
+  .grid { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+  .card { background:#111827; border:1px solid #243247; border-radius:14px; padding:18px; }
+  .card h2 { font-size:16px; margin:0 0 10px; }
+  .ok { color:#34d399; } .bad { color:#fb7185; } .dim { color:#64748b; }
+  pre { white-space:pre-wrap; word-break:break-all; font-size:11px; color:#94a3b8; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>Habitat 诊断</h1>
+  <div class="sub">安装验收：服务、世界、显示、身份、LLM、路径与原生客户端。</div>
+  <div id="grid" class="grid"></div>
+</div>
+<script>
+function card(title, value) {
+  const d = document.createElement('div');
+  d.className = 'card';
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  const ok = value && !value.error;
+  d.innerHTML = `<h2>${title}</h2><div class="${ok ? 'ok' : 'bad'}">${ok ? 'OK' : 'FAIL'}</div><pre>${text}</pre>`;
+  return d;
+}
+fetch('diagnostics.json').then(r => r.json()).then(data => {
+  const g = document.getElementById('grid');
+  for (const [k, v] of Object.entries(data.checks)) g.appendChild(card(k, v));
+});
+fetch('http://127.0.0.1:9240/status').then(r => r.json()).then(s => {
+  document.getElementById('grid').appendChild(card('control/core', s.core));
+  for (const [name, a] of Object.entries(s.adapters)) document.getElementById('grid').appendChild(card('adapter/' + name, a));
+  document.getElementById('grid').appendChild(card('tasks', s.tasks));
+}).catch(e => document.getElementById('grid').appendChild(card('control', { error: e.message })));
+</script>
+</body>
+</html>

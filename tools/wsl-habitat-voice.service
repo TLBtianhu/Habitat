@@ -1,0 +1,21 @@
+[Unit]
+Description=Habitat local Voice Server (text to PCM)
+After=network.target habitat-control.service
+Wants=habitat-control.service
+
+[Service]
+Type=simple
+User=tlb3
+Group=tlb3
+WorkingDirectory=/opt/habitat/app
+Environment=HOME=/home/tlb3
+Environment=HABITAT_VOICE_PORT=9270
+Environment=HABITAT_TTS_CACHE=/var/lib/habitat/cache/tts
+ExecStart=/home/tlb3/opt/node22/bin/node voice/server.mjs
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/lib/habitat/logs/voice.log
+StandardError=append:/var/lib/habitat/logs/voice.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,20 @@
+[Unit]
+Description=Habitat Desktop Compositor
+After=network.target
+
+[Service]
+Type=simple
+User=tlb3
+Group=tlb3
+WorkingDirectory=/opt/habitat/app
+Environment=HOME=/home/tlb3
+Environment=HABITAT_SESSION_PATH=/var/lib/habitat/app-sessions.json
+Environment=HABITAT_DESKTOP_PORT=9260
+ExecStart=/home/tlb3/opt/node22/bin/node desktop/compositor-service.mjs
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/lib/habitat/logs/desktop.log
+StandardError=append:/var/lib/habitat/logs/desktop.log
+
+[Install]
+WantedBy=multi-user.target

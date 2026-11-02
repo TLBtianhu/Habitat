@@ -1,0 +1,5 @@
+{
+  "roomId": "<主人的房间号>",
+  "rtmpUrl": "rtmps://live-push.bilivideo.com/live-bvc/",
+  "streamKey": "<在 B 站开播设置中取得的完整推流密钥>"
+}

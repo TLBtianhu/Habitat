@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>Habitat Live</title>
+<script src="/hls.min.js"></script>
+<style>
+  body { margin:0; background:#0b0f14; color:#e6edf7; font-family:Inter,"Noto Sans SC",system-ui,sans-serif; }
+  #wrap { display:flex; height:100vh; }
+  #video { flex:1; background:#000; display:flex; align-items:center; justify-content:center; position:relative; }
+  video { width:100%; height:100%; object-fit:contain; }
+  #nofeed { position:absolute; color:#64748b; font-size:14px; }
+  #side { width:320px; background:#111827; border-left:1px solid #243247; display:flex; flex-direction:column; }
+  #chat { flex:1; overflow:auto; padding:12px; }
+  .msg { margin-bottom:8px; font-size:13px; line-height:1.5; }
+  .from { color:#7c9eff; margin-right:6px; }
+  .muted { color:#64748b; font-size:13px; }
+  #input { display:flex; padding:12px; gap:8px; border-top:1px solid #243247; }
+  input { flex:1; min-width:0; background:#0b0f14; color:#e6edf7; border:1px solid #243247; border-radius:8px; padding:8px; }
+  button { background:#7c9eff; color:#0b0f14; border:0; border-radius:8px; padding:8px 12px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="video"><video id="v" controls autoplay muted playsinline></video><div id="nofeed">正在检查直播状态…</div></div>
+  <div id="side">
+    <div id="chat"></div>
+    <div id="input"><input id="text" placeholder="说点什么..."><button id="send">发送</button></div>
+  </div>
+</div>
+<script>
+const v = document.getElementById('v');
+const nofeed = document.getElementById('nofeed');
+let hls = null;
+let busy = false;
+function destroyLive() {
+  if (hls) { hls.destroy(); hls = null; }
+  v.removeAttribute('src'); v.load();
+  nofeed.hidden = false;
+}
+async function refreshLive() {
+  if (busy) return;
+  busy = true;
+  try {
+    const status = await (await fetch('/live/status', { cache: 'no-store' })).json();
+    if (!status.live) { destroyLive(); nofeed.textContent = '当前没有直播画面'; return; }
+    if (hls) return;
+    nofeed.textContent = '正在连接直播画面…';
+    if (window.Hls && Hls.isSupported()) {
+      hls = new Hls({ liveSyncDurationCount: 3 });
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { nofeed.hidden = true; v.play().catch(() => {}); });
+      hls.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) { destroyLive(); nofeed.textContent = '直播画面连接中断'; } });
+      hls.loadSource('/hls/live.m3u8');
+      hls.attachMedia(v);
+    } else {
+      v.src = '/hls/live.m3u8';
+      v.onloadedmetadata = () => { nofeed.hidden = true; v.play().catch(() => {}); };
+      v.onerror = () => { destroyLive(); nofeed.textContent = '直播画面连接中断'; };
+    }
+  } catch {
+    destroyLive(); nofeed.textContent = '无法确认直播状态';
+  } finally {
+    busy = false;
+  }
+}
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+async function loadChat() {
+  try {
+    const msgs = await (await fetch('http://127.0.0.1:9240/system/chat')).json();
+    document.getElementById('chat').innerHTML = msgs.length
+      ? msgs.map(m => `<div class="msg"><span class="from">${esc(m.from)}</span>${esc(m.text)}</div>`).join('')
+      : '<div class="muted">还没有人说话。</div>';
+  } catch {}
+}
+async function send() {
+  const text = document.getElementById('text').value.trim();
+  if (!text) return;
+  await fetch('http://127.0.0.1:9240/system/chat', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({text}) });
+  document.getElementById('text').value = '';
+  loadChat();
+}
+document.getElementById('send').onclick = send;
+document.getElementById('text').addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+refreshLive(); setInterval(refreshLive, 5000);
+loadChat(); setInterval(loadChat, 2000);
+</script>
+</body>
+</html>

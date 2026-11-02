@@ -1,0 +1,19 @@
+[Unit]
+Description=Habitat Control Server (owner console)
+After=network.target
+Wants=habitat-stage.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/habitat/app
+Environment=HOME=/root
+Environment=HABITAT_STAGE=http://127.0.0.1:9230
+ExecStart=/home/tlb3/opt/node22/bin/node control/server.mjs
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/lib/habitat/logs/control.log
+StandardError=append:/var/lib/habitat/logs/control.log
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+{
+  "name": "habitat-runtime",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "ws": "^8.18.0"
+  }
+}

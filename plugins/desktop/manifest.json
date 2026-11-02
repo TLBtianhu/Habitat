@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "desktop",
+  "name": "desktop",
+  "displayName": "Habitat Desktop Compositor",
+  "kind": "desktop",
+  "version": "0.2.0",
+  "lifecycle": "declarative",
+  "session": { "kind": "desktop", "system": true, "surface": true },
+  "capabilities": ["desktop.compose", "desktop.capture"],
+  "scopes": ["desktop.capture"],
+  "tools": [],
+  "permissions": ["desktop.capture"]
+}

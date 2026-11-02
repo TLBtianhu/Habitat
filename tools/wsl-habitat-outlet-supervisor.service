@@ -1,0 +1,21 @@
+[Unit]
+Description=Habitat Outlet Supervisor (owns encoder processes)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/habitat/app
+Environment=HOME=/root
+Environment=HABITAT_OUTLET_PORT=9272
+Environment=HABITAT_OUTLET_STATE_DIR=/var/lib/habitat/outlets
+ExecStart=/home/tlb3/opt/node22/bin/node control/outlet-supervisor.mjs
+Restart=always
+RestartSec=3
+KillMode=control-group
+TimeoutStopSec=20
+StandardOutput=append:/var/lib/habitat/logs/outlet-supervisor.log
+StandardError=append:/var/lib/habitat/logs/outlet-supervisor.log
+
+[Install]
+WantedBy=multi-user.target

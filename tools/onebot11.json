@@ -1,0 +1,4 @@
+{
+  "http": { "enable": true, "host": "127.0.0.1", "port": 3001, "token": "<NAPCAT_ACCESS_TOKEN>" },
+  "ws": { "enable": true, "host": "127.0.0.1", "port": 3002, "token": "<NAPCAT_ACCESS_TOKEN>" }
+}

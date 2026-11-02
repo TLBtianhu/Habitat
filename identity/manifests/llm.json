@@ -1,0 +1,13 @@
+{
+  "client": "llm",
+  "provider": "deepseek",
+  "kind": "token",
+  "displayName": "DeepSeek API Key",
+  "scopes": ["llm.chat", "llm.reason"],
+  "fields": [
+    { "key": "apiKey", "label": "API Key", "type": "secret", "required": true },
+    { "key": "baseUrl", "label": "Base URL（可选）", "type": "text", "required": false }
+  ],
+  "loginFlow": "token",
+  "secretRef": "llm/deepseek"
+}

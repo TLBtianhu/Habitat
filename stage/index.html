@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>Fishbowl Stage</title>
+<style>
+  :root {
+    --bg0: #07090d; --bg1: #0e1524; --ink: #cfd8ef; --dim: #6b7897;
+    --accent: #6ea8ff; --accent2: #8b5cf6; --warn: #ffb454; --bad: #ff5c6c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg0); overflow: hidden; }
+  body { font-family: "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif; color: var(--ink); }
+  #stage { position: relative; width: 1280px; height: 720px; overflow: hidden; }
+
+  /* L0 背景 */
+  #bg { position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 38%, #16213a 0%, var(--bg1) 42%, var(--bg0) 100%); }
+  #bg::after { content: ""; position: absolute; inset: -20%;
+    background: radial-gradient(circle at 70% 20%, rgba(110,168,255,.10), transparent 55%),
+                radial-gradient(circle at 20% 80%, rgba(139,92,246,.10), transparent 55%);
+    animation: drift 18s ease-in-out infinite alternate; }
+  @keyframes drift { from { transform: translate3d(-2%, -1%, 0) } to { transform: translate3d(2%, 1%, 0) } }
+
+  /* L1 主画面 */
+  #screenWrap { position: absolute; left: 60px; top: 44px; width: 1160px; height: 652px; z-index: 1;
+    border-radius: 22px; overflow: hidden;
+    box-shadow: 0 0 0 1px rgba(110,168,255,.28), 0 24px 80px rgba(0,0,0,.55), 0 0 90px rgba(110,168,255,.10);
+    background: #0a0e15; }
+  #screen { width: 100%; height: 100%; object-fit: contain; display: block; background: #0a0e15; }
+  #stale { position: absolute; inset: 0; display: none; place-items: center; text-align: center;
+    background: rgba(7,9,13,.82); backdrop-filter: blur(2px); }
+  #stale.on { display: grid; }
+  #stale b { font-size: 30px; color: var(--warn); display: block; margin-bottom: 10px; }
+  #stale span { color: var(--dim); font-size: 15px; }
+
+  /* L2 角色 */
+  #avatar { z-index: 3; position: absolute; left: 26px; bottom: 22px; width: 250px; height: 300px; }
+  #avatar svg { width: 100%; height: 100%; filter: drop-shadow(0 18px 40px rgba(0,0,0,.55)); }
+  #avatar .bob { animation: bob 4.2s ease-in-out infinite; transform-origin: 50% 90%; }
+  @keyframes bob { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
+  #avatar .eye { animation: blink 5.2s infinite; transform-origin: center; }
+  @keyframes blink { 0%,94%,100% { transform: scaleY(1) } 96% { transform: scaleY(.08) } }
+  #avatar .mouth { transform-origin: 50% 50%; }
+  #avatar.talking .mouth { animation: talk .22s steps(2, end) infinite; }
+  @keyframes talk { 0% { transform: scaleY(.4) } 100% { transform: scaleY(1.35) } }
+
+  /* L3 文字 */
+  #sub { position: absolute; left: 380px; right: 120px; bottom: 96px; text-align: center;
+    font-size: 27px; font-weight: 700; line-height: 1.45; text-shadow: 0 3px 18px rgba(0,0,0,.9);
+    background: rgba(7,9,13,.62); border: 1px solid rgba(110,168,255,.16);
+    border-radius: 14px; padding: 10px 22px; backdrop-filter: blur(4px);
+    opacity: 0; transition: opacity .18s ease; }
+  #sub.on { opacity: 1; }
+  #danmaku { position: absolute; right: 40px; top: 96px; width: 330px; height: 420px; overflow: hidden;
+    mask-image: linear-gradient(180deg, transparent, #000 12%, #000 88%, transparent); }
+  .dm { font-size: 15px; color: #b9c6e2; margin: 7px 0; padding: 5px 10px; border-radius: 9px;
+    background: rgba(12,18,30,.55); border: 1px solid rgba(110,168,255,.12);
+    animation: dmin .3s ease; }
+  @keyframes dmin { from { opacity: 0; transform: translateX(14px) } to { opacity: 1; transform: none } }
+
+  /* 顶部压暗，保证角标可读 */
+  #scrim { position: absolute; left: 0; top: 0; right: 0; height: 120px; z-index: 2; pointer-events: none;
+    background: linear-gradient(180deg, rgba(7,9,13,.88), rgba(7,9,13,.35) 55%, transparent); }
+
+  /* L4 常驻 */
+  #top { position: absolute; left: 40px; top: 26px; display: flex; gap: 10px; align-items: center; z-index: 3; }
+  .badge { font-size: 13px; padding: 5px 11px; border-radius: 999px; letter-spacing: .3px;
+    background: rgba(12,18,30,.72); border: 1px solid rgba(110,168,255,.22); color: #9fb0d0; }
+  .badge.live { color: #ff7b8a; border-color: rgba(255,92,108,.45); }
+  .badge.live i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ff5c6c;
+    margin-right: 6px; animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+  .badge b { color: #dbe6ff; font-weight: 600; }
+  #brand { position: absolute; right: 40px; top: 26px; font-size: 13px; color: var(--dim); letter-spacing: 1px; }
+  #ai { position: absolute; right: 40px; bottom: 26px; font-size: 12px; color: #55627e;
+    border: 1px solid rgba(110,168,255,.16); padding: 4px 9px; border-radius: 6px; }
+  #fps { position: absolute; left: 40px; bottom: 26px; font-size: 12px; color: #4d5a76; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bg"></div>
+  <div id="scrim"></div>
+
+  <div id="top">
+    <div class="badge live"><i></i>LIVE</div>
+    <div class="badge">控制 <b id="who">agent</b></div>
+    <div class="badge">场景 <b id="scene">world</b></div>
+    <div class="badge" id="deg" style="display:none;color:#ffb454">降级</div>
+  </div>
+  <div id="brand" style="z-index:3">FISHBOWL</div>
+
+  <div id="screenWrap">
+    <img id="screen" alt="" />
+    <canvas id="world" style="position:absolute;inset:0;width:100%;height:100%;display:none"></canvas>
+    <iframe id="fp" style="position:absolute;inset:0;width:100%;height:100%;display:none;border:0"></iframe>
+    <div id="stale"><div><b>信号中断</b><span>她那边没了动静，正在重连…</span></div></div>
+  </div>
+
+  <div id="danmaku" style="z-index:3"></div>
+
+  <div id="avatar">
+    <svg viewBox="0 0 250 300" class="bob">
+      <!-- 简化 Q 版：鲸鱼娘 -->
+      <ellipse cx="125" cy="286" rx="78" ry="12" fill="rgba(0,0,0,.45)"/>
+      <path d="M125 34c46 0 78 30 78 70 0 30-14 50-30 62 12 10 30 16 46 16-6 16-30 22-50 12-14 10-30 15-44 15s-30-5-44-15c-20 10-44 4-50-12 16 0 34-6 46-16-16-12-30-32-30-62 0-40 32-70 78-70z"
+            fill="url(#body)" stroke="#0b1220" stroke-width="3"/>
+      <defs>
+        <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#9fc3ff"/><stop offset="1" stop-color="#6a86c9"/>
+        </linearGradient>
+      </defs>
+      <ellipse cx="100" cy="104" rx="9" ry="13" fill="#121a2b" class="eye"/>
+      <ellipse cx="150" cy="104" rx="9" ry="13" fill="#121a2b" class="eye"/>
+      <ellipse cx="100" cy="100" rx="3.4" ry="4.6" fill="#eaf2ff"/>
+      <ellipse cx="150" cy="100" rx="3.4" ry="4.6" fill="#eaf2ff"/>
+      <ellipse cx="82" cy="126" rx="12" ry="7" fill="rgba(255,140,170,.35)" class="blush"/>
+      <ellipse cx="168" cy="126" rx="12" ry="7" fill="rgba(255,140,170,.35)" class="blush"/>
+      <ellipse cx="125" cy="132" rx="13" ry="8" fill="#3a2033" class="mouth"/>
+      <path d="M95 62c8-12 22-18 30-18s22 6 30 18" fill="none" stroke="#dbe8ff" stroke-width="5" stroke-linecap="round" opacity=".55"/>
+      <circle cx="125" cy="34" r="7" fill="#dbe8ff" opacity=".75"/>
+    </svg>
+  </div>
+
+  <canvas id="avatar-l2d" style="position:absolute;left:-10px;bottom:-6px;width:470px;height:470px;display:none;z-index:3"></canvas>
+  <div id="avatar-clips" style="position:absolute;left:-4px;bottom:0;width:292px;height:508px;display:none;z-index:3"></div>
+  <div id="sub" style="z-index:3"></div>
+  <div id="ai" style="z-index:3">AI 生成内容 · 非真人</div>
+  <div id="fps" style="z-index:3">--</div>
+</div>
+
+<script src="avatar.js"></script>
+<script>
+const SCENE = new URLSearchParams(location.search).get('scene') || 'stream';
+const API = 'http://127.0.0.1:9225';
+const img = document.getElementById('screen');
+const stale = document.getElementById('stale');
+const sub = document.getElementById('sub');
+const avatar = document.getElementById('avatar');
+const dmBox = document.getElementById('danmaku');
+const elFps = document.getElementById('fps');
+
+// WORLD 场景：渲染世界快照（出口侧渲染，Worker 只出状态）
+if (SCENE === 'world') {
+  img.style.display = 'none';
+  const wc = document.getElementById('world');
+  wc.style.display = 'block';
+  import('./world.js').then((m) => m.start(wc)).catch((e) => console.error('world init failed:', e));
+}
+
+let lastOk = 0, frames = 0, lastFpsAt = performance.now(), loading = false;
+
+function pullFrame() {
+  if (loading) return;
+  loading = true;
+  const im = new Image();
+  im.onload = () => {
+    img.src = im.src;
+    lastOk = performance.now();
+    frames++;
+    stale.classList.remove('on');
+    loading = false;
+  };
+  im.onerror = () => { loading = false; };
+  im.src = API + '/frame?t=' + Date.now();
+}
+// 第一视角：宿主相机 bot 的 prismarine-viewer（GPU 渲染）
+if (SCENE === 'fp') {
+  img.style.display = 'none';
+  const f = document.getElementById('fp');
+  f.style.display = 'block';
+  f.src = 'http://127.0.0.1:3007/';
+}
+
+if (SCENE !== 'world') setInterval(pullFrame, 45);
+
+function tickWatch() {
+  if (SCENE === 'world') { stale.classList.remove('on'); return; }
+  const age = performance.now() - lastOk;
+  stale.classList.toggle('on', age > 2500);
+  const now = performance.now();
+  if (now - lastFpsAt > 1000) {
+    elFps.textContent = Math.round(frames * 1000 / (now - lastFpsAt)) + ' fps · 1280×720';
+    frames = 0; lastFpsAt = now;
+  }
+}
+setInterval(tickWatch, 400);
+
+async function pullStatus() {
+  try {
+    const s = await (await fetch(API + '/status')).json();
+    document.getElementById('who').textContent = s.controller || 'agent';
+    document.getElementById('scene').textContent = s.scene || 'world';
+    document.getElementById('deg').style.display = s.degraded ? '' : 'none';
+  } catch {}
+}
+setInterval(pullStatus, 1000);
+
+// —— P2 演示用：字幕与弹幕由本地假数据驱动（P3 接真实事件）
+const lines = [
+  '先把这棵树的木头砍够，晚上要搭屋顶。',
+  '这条弹幕问我在干嘛——我在攒木头，别急。',
+  '等一下，我看看这个合成表对不对。',
+  '有人点了歌，等下播完这段就放。'
+];
+let li = 0;
+function say() {
+  const t = lines[li++ % lines.length];
+  sub.textContent = t;
+  sub.classList.add('on');
+  Avatar.setExpression(['happy', 'shy', 'think'][li % 3]);
+  Avatar.setTalk(true);
+  // 口型：用假包络模拟 TTS 的 RMS（接真实 TTS 后由音频分析替换）
+  let phase = 0;
+  const mouthTimer = setInterval(() => {
+    phase += 0.12;
+    Avatar.setMouth(0.35 + 0.45 * Math.abs(Math.sin(phase * 3.1)));
+  }, 60);
+  setTimeout(() => {
+    sub.classList.remove('on');
+    Avatar.setTalk(false);
+    Avatar.setMouth(0);
+    clearInterval(mouthTimer);
+    Avatar.setExpression('idle');
+  }, 2600);
+}
+// 形象适配层：引擎可换，驱动协议不变（见 avatar.js）
+Avatar.use(Avatar.createSpriteAvatar(document.getElementById('avatar')));
+
+// 形象后端：sprite（默认占位）/ live2d（鲸鱼娘女仆版）/ clips（大肥鱼木偶动画）
+const AVATAR_MODE = new URLSearchParams(location.search).get('avatar') || 'sprite';
+if (AVATAR_MODE === 'live2d') {
+  document.getElementById('avatar').style.display = 'none';
+  const cv = document.getElementById('avatar-l2d');
+  cv.style.display = 'block';
+  import('./avatar-live2d.js')
+    .then((m) => m.initLive2D(cv, '/model/c_0120.model3.json'))
+    .then((b) => Avatar.use(b))
+    .catch((e) => console.error('live2d init failed:', e));
+} else if (AVATAR_MODE === 'clips') {
+  document.getElementById('avatar').style.display = 'none';
+  const host = document.getElementById('avatar-clips');
+  host.style.display = 'block';
+  import('./avatar-clips.js')
+    .then(async (m) => {
+      const man = await (await fetch('/dafeiyu/character.json')).json();
+      return m.initClips(host, '/dafeiyu/', man);
+    })
+    .then((b) => Avatar.use(b))
+    .catch((e) => console.error('clips init failed:', e));
+}
+let __lastT = performance.now();
+function avatarLoop(t) {
+  const dt = (t - __lastT) / 1000;
+  __lastT = t;
+  Avatar.tick(dt);
+  requestAnimationFrame(avatarLoop);
+}
+requestAnimationFrame(avatarLoop);
+
+setInterval(say, 4200);
+setTimeout(say, 600);
+
+// 真实聊天：只显示控制面 /chat 的消息，不再用演示弹幕
+async function loadRealChat() {
+  try {
+    const msgs = await (await fetch('http://127.0.0.1:9240/chat')).json();
+    dmBox.innerHTML = msgs.slice(-9).map((m) => `<div class="dm">${m.from}：${m.text}</div>`).join('');
+  } catch {}
+}
+loadRealChat();
+setInterval(loadRealChat, 2000);
+</script>
+</body>
+</html>
+

@@ -1,0 +1,10 @@
+{
+  "client": "qq",
+  "provider": "onebot",
+  "kind": "qrcode",
+  "displayName": "QQ 机器人账号",
+  "scopes": ["qq.read", "qq.send"],
+  "fields": [{ "key": "uin", "label": "QQ 号", "type": "text", "required": true }],
+  "loginFlow": "qrcode",
+  "secretRef": "qq/main"
+}

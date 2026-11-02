@@ -1,0 +1,20 @@
+[Unit]
+Description=Habitat Display stage server (WSL)
+After=network.target
+
+[Service]
+Type=simple
+User=tlb3
+Group=tlb3
+WorkingDirectory=/opt/habitat/app
+Environment=HOME=/home/tlb3
+Environment=FB_STAGE_ROOT=/opt/habitat/app/stage
+Environment=FB_HLS_ROOT=/var/lib/habitat/hls
+ExecStart=/home/tlb3/opt/node22/bin/node /opt/habitat/app/tools/stage-server.mjs
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/lib/habitat/logs/stage.log
+StandardError=append:/var/lib/habitat/logs/stage.log
+
+[Install]
+WantedBy=multi-user.target

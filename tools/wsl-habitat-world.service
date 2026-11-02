@@ -1,0 +1,18 @@
+[Unit]
+Description=Habitat AI Client world bot (WSL user environment)
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=tlb3
+Group=tlb3
+Environment=HOME=/home/tlb3
+Environment=FB_SESSION=/var/lib/habitat/artifacts/world-session.json
+ExecStart=/opt/habitat/app/tools/world-up.sh
+StandardOutput=append:/var/lib/habitat/logs/world.log
+StandardError=append:/var/lib/habitat/logs/world.log
+
+[Install]
+WantedBy=multi-user.target

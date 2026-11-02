@@ -1,0 +1,9 @@
+/var/lib/habitat/logs/*.log /opt/habitat/app/mc-native/logs/latest.log {
+    size 10M
+    rotate 7
+    compress
+    missingok
+    notifempty
+    copytruncate
+    su root root
+}

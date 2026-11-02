@@ -1,0 +1,17 @@
+[Unit]
+Description=Habitat Identity Hub (WSL)
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=tlb3
+Group=tlb3
+Environment=HOME=/home/tlb3
+ExecStart=/opt/habitat/app/tools/wsl-identity-up.sh
+StandardOutput=append:/var/lib/habitat/logs/identity.log
+StandardError=append:/var/lib/habitat/logs/identity.log
+
+[Install]
+WantedBy=multi-user.target

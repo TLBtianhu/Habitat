@@ -1,0 +1,19 @@
+[Unit]
+Description=Habitat HLS Outlet (Desktop capture consumer)
+After=network.target habitat-stage.service habitat-desktop.service habitat-audio.service
+Wants=habitat-stage.service habitat-desktop.service habitat-audio.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=tlb3
+Group=tlb3
+Environment=HOME=/home/tlb3
+Environment=LD_LIBRARY_PATH=/home/tlb3/opt/deps/usr/lib/x86_64-linux-gnu
+ExecStart=/opt/habitat/app/tools/wsl-pipeline-up.sh
+StandardOutput=append:/var/lib/habitat/logs/pipeline.log
+StandardError=append:/var/lib/habitat/logs/pipeline.log
+
+[Install]
+WantedBy=multi-user.target

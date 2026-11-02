@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "bundle": "habitat-core-runtime",
+  "platform": "linux-x64",
+  "node": {
+    "version": "22.x-pinned",
+    "sha256": "<required>"
+  },
+  "jdk": {
+    "version": "21.x-pinned",
+    "sha256": "<required>"
+  },
+  "chrome": {
+    "version": "<pinned>",
+    "sha256": "<required>"
+  },
+  "ffmpeg": {
+    "version": "<pinned>",
+    "sha256": "<required>"
+  },
+  "kokoro": {
+    "version": "<pinned>",
+    "sha256": "<required>"
+  },
+  "sbom": "sbom.json",
+  "signature": "<required>"
+}

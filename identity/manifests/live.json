@@ -1,0 +1,10 @@
+{
+  "client": "live",
+  "provider": "bilibili",
+  "kind": "qrcode",
+  "displayName": "B 站直播账号",
+  "scopes": ["live.read", "live.write", "live.push"],
+  "fields": [{ "key": "sessdata", "label": "SESSDATA（也可改用扫码）", "type": "secret", "required": false }],
+  "loginFlow": "qrcode",
+  "secretRef": "live/bilibili"
+}

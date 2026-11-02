@@ -1,0 +1,17 @@
+{
+  "id": "kokoro-82m-multi-lang-v1_0",
+  "kind": "tts-model",
+  "architecture": "Kokoro neural TTS / ONNX",
+  "source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",
+  "sha256": "60703707bc05ccd48d60e1eb723f38b07d6e474795a0b6a588d7220400e0f7a4",
+  "license": "Apache-2.0",
+  "modelDir": "/var/lib/habitat/models/tts/kokoro-multi-lang-v1_0",
+  "runtime": {
+    "engine": "sherpa-onnx",
+    "version": "2.0.1",
+    "provider": "cpu",
+    "venv": "/opt/habitat/runtime/tts-venv"
+  },
+  "defaultVoiceProfile": "generic/kokoro-zf-xiaoni",
+  "dafeiyu": false
+}

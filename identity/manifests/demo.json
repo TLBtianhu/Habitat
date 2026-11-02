@@ -1,0 +1,10 @@
+{
+  "client": "demo",
+  "provider": "mockqr",
+  "kind": "qrcode",
+  "displayName": "演示扫码登录",
+  "scopes": ["demo.bind"],
+  "fields": [],
+  "loginFlow": "qrcode",
+  "secretRef": "demo/mock"
+}

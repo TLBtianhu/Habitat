@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "system.chat",
+  "name": "system.chat",
+  "displayName": "Core 系统对话",
+  "kind": "system",
+  "version": "0.2.0",
+  "lifecycle": "declarative",
+  "provider": "provider.mjs",
+  "capabilities": ["system.chat.read", "system.say"],
+  "scopes": ["system.chat"],
+  "tools": [
+    {
+      "name": "system.say",
+      "description": "只在 Core 控制台发送文字，不进入任何第三方应用",
+      "handler": "say",
+      "scope": "system.chat",
+      "concurrency": "serial",
+      "idempotency": "per-intent",
+      "timeoutMs": 10000,
+      "inputSchema": {
+        "type": "object",
+        "properties": { "text": { "type": "string" } },
+        "required": ["text"],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "permissions": ["system.say"]
+}

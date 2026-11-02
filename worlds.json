@@ -1,0 +1,31 @@
+{
+  "worlds": [
+    {
+      "id": "home",
+      "kind": "local",
+      "address": "127.0.0.1:25565",
+      "version": "1.21.4",
+      "auth": "offline",
+      "policy": "owner",
+      "note": "自己开的本地世界（宿主 mc-1.21.4）"
+    },
+    {
+      "id": "lan",
+      "kind": "lan",
+      "address": "192.168.1.100:25565",
+      "version": "1.21.4",
+      "auth": "offline",
+      "policy": "owner",
+      "note": "你用自己的账号进来一起玩"
+    },
+    {
+      "id": "friend-smp",
+      "kind": "remote",
+      "address": "smp.example.com:25565",
+      "version": "1.21.4",
+      "auth": "offline",
+      "policy": "guest",
+      "note": "别人的服（示例，guest 策略：禁执行代码、限改方块、禁私信）"
+    }
+  ]
+}

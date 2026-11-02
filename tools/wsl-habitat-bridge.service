@@ -1,0 +1,18 @@
+[Unit]
+Description=Habitat bridge (WSL user environment)
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=tlb3
+Group=tlb3
+Environment=HOME=/home/tlb3
+Environment=FB_ART=/var/lib/habitat/artifacts
+ExecStart=/opt/habitat/app/tools/wsl-bridge-up.sh
+StandardOutput=append:/var/lib/habitat/logs/bridge.log
+StandardError=append:/var/lib/habitat/logs/bridge.log
+
+[Install]
+WantedBy=multi-user.target

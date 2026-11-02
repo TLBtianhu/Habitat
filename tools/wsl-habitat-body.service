@@ -1,0 +1,27 @@
+[Unit]
+Description=Habitat AI Client body (WSL user environment)
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=tlb3
+Group=tlb3
+Environment=HOME=/home/tlb3
+Environment=LD_LIBRARY_PATH=/home/tlb3/opt/deps/usr/lib/x86_64-linux-gnu
+Environment=FB_HOST=127.0.0.1
+Environment=FB_PORT=9224
+Environment=FB_START_URL=http://127.0.0.1:9230/?scene=world&avatar=clips
+Environment=FB_GPU=1
+Environment=FB_ANGLE=gl
+Environment=FB_BROWSER=0
+ExecStart=/usr/bin/python3 /opt/habitat/app/tools/body.py
+StandardOutput=append:/var/lib/habitat/logs/body.log
+StandardError=append:/var/lib/habitat/logs/body.log
+InaccessiblePaths=-/mnt/c
+InaccessiblePaths=-/mnt/d
+InaccessiblePaths=-/mnt/wslg
+
+[Install]
+WantedBy=multi-user.target

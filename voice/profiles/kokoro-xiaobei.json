@@ -1,0 +1,16 @@
+{
+  "id": "generic/kokoro-zf-xiaobei",
+  "label": "Kokoro 小北（神经测试音色，非大肥鱼）",
+  "backend": "kokoro",
+  "model": "kokoro-82m-multi-lang-v1_0",
+  "modelDir": "/var/lib/habitat/models/tts/kokoro-multi-lang-v1_0",
+  "binary": "/opt/habitat/runtime/tts-venv/bin/sherpa-onnx-offline-tts",
+  "speaker": "zf_xiaobei",
+  "speakerId": 45,
+  "threads": 4,
+  "kind": "test",
+  "enabled": true,
+  "dafeiyu": false,
+  "source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-multi-lang-v1_0.tar.bz2",
+  "notes": "Kokoro 82M 神经网络 TTS；中文预置音色，不是大肥鱼专属音色。"
+}

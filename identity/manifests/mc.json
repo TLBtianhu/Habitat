@@ -1,0 +1,10 @@
+{
+  "client": "mc",
+  "provider": "offline",
+  "kind": "offline",
+  "displayName": "Minecraft 离线昵称",
+  "scopes": ["mc.join", "mc.chat", "mc.action"],
+  "fields": [{ "key": "username", "label": "昵称", "type": "text", "required": true }],
+  "loginFlow": "offline",
+  "secretRef": "mc/main"
+}

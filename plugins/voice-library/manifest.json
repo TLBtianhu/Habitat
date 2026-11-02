@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "voice.library",
+  "name": "voice.library",
+  "displayName": "音色库",
+  "kind": "voice.library",
+  "version": "0.2.0",
+  "lifecycle": "declarative",
+  "session": { "kind": "voice.library", "system": true, "surface": false },
+  "provider": "provider.mjs",
+  "capabilities": ["voice.profiles", "voice.speak"],
+  "scopes": ["voice.speak"],
+  "tools": [
+    {
+      "name": "voice.speak",
+      "description": "选择音色生成语音；只处理大肥鱼自己的文本或已有 messageId",
+      "handler": "speak",
+      "scope": "voice.speak",
+      "concurrency": "serial",
+      "idempotency": "per-intent",
+      "timeoutMs": 15000,
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": { "type": "string" },
+          "messageId": { "type": "number" },
+          "voiceProfile": { "type": "string" },
+          "delivery": { "type": "array" },
+          "priority": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  ],
+  "permissions": ["voice.speak"]
+}

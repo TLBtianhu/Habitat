@@ -1,0 +1,20 @@
+[Unit]
+Description=Habitat continuous AgentLoop
+After=network.target habitat-control.service
+Wants=habitat-control.service
+
+[Service]
+Type=simple
+User=tlb3
+Group=tlb3
+WorkingDirectory=/opt/habitat/app
+Environment=HOME=/home/tlb3
+Environment=HABITAT_SESSION_PATH=/var/lib/habitat/app-sessions.json
+ExecStart=/home/tlb3/opt/node22/bin/node agent/run-continuous.mjs
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/lib/habitat/logs/agent.log
+StandardError=append:/var/lib/habitat/logs/agent.log
+
+[Install]
+WantedBy=multi-user.target

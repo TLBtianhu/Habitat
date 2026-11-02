@@ -1,0 +1,11 @@
+{
+  "id": "generic/espeak-cmn",
+  "label": "通用测试音色（非大肥鱼）",
+  "backend": "espeak-ng",
+  "voice": "cmn",
+  "rate": 165,
+  "kind": "test",
+  "enabled": false,
+  "dafeiyu": false,
+  "notes": "仅用于本地语音链路验收，不代表大肥鱼音色。"
+}

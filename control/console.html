@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<title>Habitat Console</title>
+<script src="/hls.min.js"></script>
+<style>
+  body { margin:0; background:#0b0f14; color:#e6edf7; font-family:Inter,"Noto Sans SC",system-ui,sans-serif; }
+  #tabs { display:flex; align-items:center; gap:8px; padding:10px 16px; background:#111827; border-bottom:1px solid #243247; }
+  .tab { padding:7px 15px; border-radius:8px; cursor:pointer; color:#94a3b8; font-size:14px; }
+  .tab.active { background:#7c9eff; color:#0b0f14; font-weight:600; }
+  #state { margin-left:auto; font-size:12px; color:#64748b; }
+  #main { display:flex; height:calc(100vh - 53px); }
+  #live { flex:1; background:#000; display:flex; align-items:center; justify-content:center; position:relative; }
+  video { width:100%; height:100%; object-fit:contain; }
+  #nofeed { position:absolute; color:#475569; font-size:14px; text-align:center; line-height:1.8; }
+  #side { width:380px; min-width:380px; background:#111827; border-left:1px solid #243247; padding:14px; overflow:auto; box-sizing:border-box; }
+  .card { background:#0b0f14; border:1px solid #243247; border-radius:12px; padding:12px; margin-bottom:10px; font-size:13px; }
+  .card pre { margin:0; white-space:pre-wrap; word-break:break-all; color:#cbd5e1; font-size:12px; }
+  .row { display:flex; gap:6px; }
+  input, select { background:#0b0f14; color:#e6edf7; border:1px solid #243247; border-radius:8px; padding:8px; flex:1; font-size:13px; min-width:0; }
+  button { background:#7c9eff; color:#0b0f14; border:0; border-radius:8px; padding:8px 12px; font-size:13px; cursor:pointer; white-space:nowrap; }
+  button.ghost { background:#243247; color:#e6edf7; }
+  .msg { margin-bottom:8px; font-size:13px; line-height:1.5; }
+  .from { color:#7c9eff; margin-right:6px; }
+  .at { color:#475569; font-size:11px; margin-left:6px; }
+  .muted { color:#64748b; }
+</style>
+</head>
+<body>
+<div id="tabs">
+  <div class="tab active" data-tab="live">Live</div>
+  <div class="tab" data-tab="chat">Chat</div>
+  <div class="tab" data-tab="tasks">Tasks</div>
+  <div id="state">连接中…</div>
+</div>
+<div id="main">
+  <div id="live"><video id="v" muted playsinline></video><div id="nofeed">正在检查画面投送…</div></div>
+  <div id="side"></div>
+</div>
+<script>
+const token = new URLSearchParams(location.search).get('token') || '';
+const side = document.getElementById('side');
+const stateEl = document.getElementById('state');
+const nofeed = document.getElementById('nofeed');
+
+async function api(p, opts = {}) {
+  const r = await fetch(p, {
+    ...opts,
+    headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token, ...(opts.headers || {}) },
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => null);
+    throw new Error(data?.error || `${p} → HTTP ${r.status}`);
+  }
+  return r.json();
+}
+const get = (p) => api(p);
+const post = (p, body) => api(p, { method: 'POST', body: JSON.stringify(body || {}) });
+
+// ---- Live：只显示真实的投送，没推流就明说 ----
+const v = document.getElementById('v');
+let hls = null;
+let liveWanted = false;
+let liveBusy = false;
+function destroyLive() {
+  if (hls) { hls.destroy(); hls = null; }
+  v.removeAttribute('src'); v.load();
+  nofeed.hidden = false;
+}
+async function refreshLive() {
+  if (!liveWanted || liveBusy) return;
+  liveBusy = true;
+  try {
+    const status = await get('/live/status');
+    if (!liveWanted) return;
+    if (!status.live) {
+      destroyLive();
+      nofeed.textContent = '当前没有直播画面';
+      return;
+    }
+    if (hls) return;
+    nofeed.textContent = '正在连接直播画面…';
+    const src = '/hls/live.m3u8';
+    if (window.Hls && Hls.isSupported()) {
+      hls = new Hls({ liveSyncDurationCount: 3 });
+      hls.on(Hls.Events.MANIFEST_PARSED, () => { nofeed.hidden = true; v.play().catch(() => {}); });
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.fatal) { destroyLive(); nofeed.textContent = '直播画面连接中断'; }
+      });
+      hls.loadSource(src);
+      hls.attachMedia(v);
+    } else {
+      v.src = src;
+      v.onloadedmetadata = () => { nofeed.hidden = true; v.play().catch(() => {}); };
+      v.onerror = () => { destroyLive(); nofeed.textContent = '直播画面连接中断'; };
+    }
+  } catch (e) {
+    destroyLive();
+    nofeed.textContent = '无法确认直播状态';
+  } finally {
+    liveBusy = false;
+  }
+}
+function startLive() {
+  liveWanted = true;
+  refreshLive();
+}
+function stopLive() {
+  liveWanted = false;
+  destroyLive();
+  nofeed.textContent = '正在检查画面投送…';
+}
+setInterval(refreshLive, 5000);
+
+async function renderLiveSide() {
+  const outlets = await get('/outlets/status');
+  const card = (name, title, note) => {
+    const o = outlets[name] || { running: false };
+    const action = o.running ? 'stop' : 'start';
+    return `<div class="card"><div>${title}：<span class="${o.running ? '' : 'muted'}">${o.running ? '编码进程运行中' : '已停止'}</span></div>` +
+      `<div class="muted" style="margin:6px 0 10px">${note}</div>` +
+      `<button class="${o.running ? 'ghost' : ''}" onclick="outletAction('${name}','${action}')">${o.running ? '停止' : '启动'}</button></div>`;
+  };
+  side.innerHTML = '<div class="card muted">画面由 Desktop 合成；以下只是独立的编码与通信出口。</div>' +
+    card('hls', '本地 HLS', '用于本地预览，不对外公开。') +
+    card('rtmp', 'B 站 RTMPS', outlets.rtmp?.configured ? '使用主人保存的推流配置。' : '尚未配置推流地址。');
+}
+window.outletAction = async (name, action) => {
+  if (name === 'rtmp' && action === 'start' && !confirm('确认按主人配置向 B 站公开推流？')) return;
+  try {
+    stateEl.textContent = '正在执行…';
+    await post(`/outlets/${action}`, { name });
+    stateEl.textContent = '已执行';
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
+  renderLiveSide().catch(() => {});
+};
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+function clock(t) {
+  const d = new Date(t);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+// ---- Chat：系统通道实时刷新；只更新消息区，不打断主人输入 ----
+let chatSignature = '';
+let chatBusy = false;
+function ensureChatLayout() {
+  if (document.getElementById('msgs') && document.getElementById('send')) return;
+  side.innerHTML =
+    '<div class="card" id="msgs"></div>' +
+    '<div class="card"><div class="row"><input id="text" placeholder="以主人身份说话…" /><button id="send">发送</button></div>' +
+    '<div class="row" style="margin-top:8px"><button id="audio" class="ghost">开启声音</button><span id="audio-state" class="muted">通用测试音色</span></div>' +
+    '<div class="row" style="margin-top:8px"><select id="voice-profile"></select><button id="sample" class="ghost">试听</button></div></div>';
+  chatSignature = '';
+  document.getElementById('send').onclick = sendSystemChat;
+  document.getElementById('text').onkeydown = (e) => { if (e.key === 'Enter') sendSystemChat(); };
+  document.getElementById('audio').onclick = toggleAudio;
+  document.getElementById('voice-profile').onchange = changeVoiceProfile;
+  document.getElementById('sample').onclick = sampleVoice;
+  updateAudioButton();
+  loadVoiceProfiles().catch(() => {});
+}
+async function sendSystemChat() {
+  const input = document.getElementById('text');
+  const t = input.value.trim();
+  if (!t) return;
+  const button = document.getElementById('send');
+  button.disabled = true;
+  try {
+    await post('/system/chat', { text: t });
+    input.value = '';
+    await renderChat();
+    input.focus();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+async function renderChat() {
+  if (chatBusy) return;
+  chatBusy = true;
+  try {
+    ensureChatLayout();
+    const msgs = await get('/system/chat');
+    if (current !== 'chat') return;
+    const signature = msgs.length ? `${msgs.length}:${msgs[msgs.length - 1].id}` : 'empty';
+    if (signature === chatSignature) return;
+    const msgsEl = document.getElementById('msgs');
+    msgsEl.innerHTML = msgs.length
+      ? msgs.map((m) => `<div class="msg"><span class="from">${esc(m.from)}</span>${esc(m.text)}<span class="at">${clock(m.at)}</span></div>`).join('')
+      : '<div class="muted">还没有人说话。</div>';
+    chatSignature = signature;
+    msgsEl.scrollTop = msgsEl.scrollHeight;
+  } finally {
+    chatBusy = false;
+  }
+}
+
+// ---- Voice：用户主动开启后才拉取音频；一句话只请求一次 PCM/WAV ----
+let audioEnabled = false;
+let audioCtx = null;
+let audioQueue = [];
+let audioPlaying = false;
+let audioPollBusy = false;
+let currentAudioSource = null;
+let lastUtteranceId = 0;
+function updateAudioButton() {
+  const button = document.getElementById('audio');
+  if (!button) return;
+  button.textContent = audioEnabled ? '关闭声音' : '开启声音';
+  button.classList.toggle('ghost', !audioEnabled);
+}
+async function loadVoiceProfiles() {
+  const status = await get('/voice/status');
+  const select = document.getElementById('voice-profile');
+  const label = document.getElementById('audio-state');
+  if (!select) return;
+  const profiles = (status.library?.profiles || []).filter((p) => p.enabled && p.available);
+  select.innerHTML = profiles.map((p) => `<option value="${esc(p.id)}">${esc(p.label)}</option>`).join('');
+  select.value = status.library.defaultProfile;
+  const current = profiles.find((p) => p.id === status.library.defaultProfile);
+  if (label && current) label.textContent = current.label;
+}
+async function changeVoiceProfile() {
+  const select = document.getElementById('voice-profile');
+  try {
+    await post('/voice/profiles/default', { voiceProfile: select.value });
+    await loadVoiceProfiles();
+    stateEl.textContent = '默认音色已保存';
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
+}
+async function sampleVoice() {
+  try {
+    if (!audioEnabled) await toggleAudio();
+    if (!audioEnabled) return;
+    const voiceProfile = document.getElementById('voice-profile').value;
+    const u = await post('/voice/profiles/sample', { voiceProfile, text: '你好，这是音色试听。' });
+    lastUtteranceId = Math.max(lastUtteranceId, u.id);
+    audioQueue.push(u.id);
+    playNextAudio();
+  } catch (e) {
+    stateEl.textContent = '试听失败：' + e.message;
+  }
+}
+async function toggleAudio() {
+  if (audioEnabled) { disableAudio(); return; }
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AudioContext();
+    await audioCtx.resume();
+    const existing = await get('/voice/utterances');
+    lastUtteranceId = existing.reduce((max, u) => Math.max(max, u.id), 0);
+    audioEnabled = true;
+    updateAudioButton();
+  } catch (e) {
+    stateEl.textContent = '声音开启失败：' + e.message;
+  }
+}
+function disableAudio() {
+  audioEnabled = false;
+  audioQueue = [];
+  audioPlaying = false;
+  try { currentAudioSource?.stop(); } catch {}
+  currentAudioSource = null;
+  if (audioCtx) audioCtx.close().catch(() => {});
+  audioCtx = null;
+  updateAudioButton();
+}
+async function pollAudio() {
+  if (!audioEnabled || audioPollBusy) return;
+  audioPollBusy = true;
+  try {
+    const items = await get('/voice/utterances?since=' + lastUtteranceId);
+    for (const u of items) {
+      lastUtteranceId = Math.max(lastUtteranceId, u.id);
+      if (u.status !== 'error') audioQueue.push(u.id);
+    }
+    playNextAudio();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  } finally {
+    audioPollBusy = false;
+  }
+}
+async function playNextAudio() {
+  if (!audioEnabled || audioPlaying || !audioQueue.length) return;
+  audioPlaying = true;
+  const id = audioQueue.shift();
+  try {
+    const r = await fetch('/voice/utterances/' + id + '/audio', { headers: { authorization: 'Bearer ' + token } });
+    if (!r.ok) throw new Error('音频 HTTP ' + r.status);
+    const data = await r.arrayBuffer();
+    const decoded = await audioCtx.decodeAudioData(data);
+    if (!audioEnabled) return;
+    const source = audioCtx.createBufferSource();
+    source.buffer = decoded;
+    source.connect(audioCtx.destination);
+    currentAudioSource = source;
+    source.onended = () => {
+      audioPlaying = false;
+      currentAudioSource = null;
+      playNextAudio();
+    };
+    source.start();
+  } catch (e) {
+    stateEl.textContent = '语音播放失败：' + e.message;
+    audioPlaying = false;
+    playNextAudio();
+  }
+}
+setInterval(() => { if (audioEnabled) pollAudio(); }, 1000);
+
+// ---- Tasks：AI 能提，只有主人能批 ----
+async function renderTasks() {
+  const s = await get('/status');
+  const tasks = s.tasks || [];
+  side.innerHTML =
+    '<div class="card"><pre>' + esc(JSON.stringify(s.core, null, 2)) + '</pre></div>' +
+    (tasks.length
+      ? tasks.map((t) => `<div class="card">#${t.id} ${esc(t.type)} ${esc(t.name)} → ${esc(t.status)}${
+          t.status === 'pending'
+            ? ` <button onclick="act(${t.id},'approve')">批准</button><button class="ghost" onclick="act(${t.id},'reject')">拒绝</button>`
+            : ''
+        }</div>`).join('')
+      : '<div class="card muted">没有待办。</div>');
+}
+
+window.act = async (id, a) => {
+  try { await post(`/tasks/${id}/${a}`, {}); } catch (e) { stateEl.textContent = e.message; }
+  renderTasks();
+};
+
+async function render(tab) {
+  try {
+    stateEl.textContent = '已连接 127.0.0.1:9240';
+    if (tab === 'chat') return await renderChat();
+    if (tab === 'tasks') return await renderTasks();
+  } catch (e) {
+    stateEl.textContent = e.message;
+    side.innerHTML = '<div class="card muted">控制面没有响应：' + esc(e.message) + '</div>';
+  }
+}
+
+let current = 'live';
+document.querySelectorAll('.tab').forEach((el) => {
+  el.onclick = () => {
+    document.querySelectorAll('.tab').forEach((x) => x.classList.remove('active'));
+    el.classList.add('active');
+    current = el.dataset.tab;
+    if (current === 'live') { startLive(); renderLiveSide().catch((e) => { stateEl.textContent = e.message; }); }
+    else { stopLive(); render(current); }
+  };
+});
+
+setInterval(() => {
+  if (current === 'chat') renderChat().catch((e) => { stateEl.textContent = e.message; });
+}, 2000);
+
+startLive();
+renderLiveSide().catch((e) => { stateEl.textContent = e.message; });
+get('/status').then((s) => { stateEl.textContent = `core ${s.core.version} · ${s.core.phase}`; }).catch((e) => { stateEl.textContent = e.message; });
+</script>
+</body>
+</html>

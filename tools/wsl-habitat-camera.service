@@ -1,0 +1,18 @@
+[Unit]
+Description=Habitat first-person camera (WSL)
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+User=tlb3
+Group=tlb3
+Environment=HOME=/home/tlb3
+Environment=LD_LIBRARY_PATH=/home/tlb3/opt/deps/usr/lib/x86_64-linux-gnu
+ExecStart=/opt/habitat/app/tools/wsl-camera-up.sh
+StandardOutput=append:/var/lib/habitat/logs/camera.log
+StandardError=append:/var/lib/habitat/logs/camera.log
+
+[Install]
+WantedBy=multi-user.target

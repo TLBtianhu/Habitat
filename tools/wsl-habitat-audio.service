@@ -1,0 +1,21 @@
+[Unit]
+Description=Habitat continuous Audio Mixer
+After=network.target habitat-voice.service
+Wants=habitat-voice.service
+
+[Service]
+Type=simple
+User=tlb3
+Group=tlb3
+WorkingDirectory=/opt/habitat/app
+Environment=HOME=/home/tlb3
+Environment=HABITAT_AUDIO_PORT=9271
+Environment=HABITAT_VOICE_URL=http://127.0.0.1:9270
+ExecStart=/home/tlb3/opt/node22/bin/node audio/mixer-service.mjs
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/lib/habitat/logs/audio.log
+StandardError=append:/var/lib/habitat/logs/audio.log
+
+[Install]
+WantedBy=multi-user.target

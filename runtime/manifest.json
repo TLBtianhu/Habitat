@@ -1,0 +1,7 @@
+{
+  "id": "habitat-runtime-core",
+  "version": "0.1.0",
+  "url": "https://www.modelscope.cn/datasets/TLBtianhu/Habitat-Dist/resolve/master/runtime/habitat-runtime-core-0.1.0.tar.gz",
+  "sha256": "4dcc8b381c15f5bb82d083dd7a50d85104af91c4d4ace1db5a1d162879d740fb",
+  "notes": "运行时独立分发测试包；真实运行时包含 Node/JDK/Chrome/MC 资源"
+}
