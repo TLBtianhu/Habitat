@@ -46,15 +46,20 @@ const index = {
     { ...baseIndex.plugins[0], artifact: { ...baseIndex.plugins[0].artifact, url: 'APP_QQ_URL' } },
     { ...baseIndex.plugins[0], id: 'bad', artifact: { ...baseIndex.plugins[0].artifact, sha256: '0'.repeat(64), url: 'APP_BAD_URL' } },
     { ...baseIndex.plugins[0], id: 'revoked', revoked: true, artifact: { ...baseIndex.plugins[0].artifact, url: 'APP_REVOKED_URL' } },
+    { ...baseIndex.plugins[0], id: 'remote-revoked', artifact: { ...baseIndex.plugins[0].artifact, url: 'APP_REMOTE_REVOKED_URL' } },
   ],
 };
+const revocations = { schemaVersion: 1, revoked: ['remote-revoked'] };
 let canonical;
 let signature;
+let revocationSignature;
 let server;
 try {
   server = http.createServer((req, res) => {
     if (req.url === '/index.json') { res.end(JSON.stringify(index)); return; }
     if (req.url === '/index.sig.json') { res.end(JSON.stringify({ algorithm: 'Ed25519', signature })); return; }
+    if (req.url === '/revocations.json') { res.end(JSON.stringify(revocations)); return; }
+    if (req.url === '/revocations.sig.json') { res.end(JSON.stringify({ algorithm: 'Ed25519', signature: revocationSignature })); return; }
     if (req.url === '/release-public-key.pem') { res.end(publicPem); return; }
     if (req.url === '/app-qq.zip') { res.end(zipBytes); return; }
     if (req.url === '/bad-signature.json') { res.end(JSON.stringify({ algorithm: 'Ed25519', signature: 'bad' })); return; }
@@ -67,8 +72,10 @@ try {
   index.plugins[0].artifact.url = `http://127.0.0.1:${port}/app-qq.zip`;
   index.plugins[1].artifact.url = `http://127.0.0.1:${port}/app-bad.zip`;
   index.plugins[2].artifact.url = `http://127.0.0.1:${port}/app-revoked.zip`;
+  index.plugins[3].artifact.url = `http://127.0.0.1:${port}/app-qq.zip`;
   canonical = JSON.stringify(index, null, 2) + '\n';
   signature = crypto.sign(null, canonical, privateKey).toString('base64');
+  revocationSignature = crypto.sign(null, JSON.stringify(revocations, null, 2) + '\n', privateKey).toString('base64');
   const installer = new PluginInstaller({ indexUrl: `http://127.0.0.1:${port}/index.json`, cacheDir });
   const installed = await installer.install('qq');
   assert.equal(installed.id, 'qq');
@@ -85,6 +92,21 @@ try {
   assert.equal((await registry.call('qq.reply', { text: 'installed' })).message_id, 42);
   await registry.stop('qq');
   assert.equal(installer._cachedIndex(new Error('offline')).plugins[0].id, 'qq');
+  const baseDirs = [path.join(ROOT, 'adapters')];
+  installer.disable('qq');
+  assert.throws(() => installer.registry(baseDirs).getTool('qq.reply'), /unknown tool/);
+  installer.enable('qq');
+  assert.ok(installer.registry(baseDirs).getTool('qq.reply'));
+  installer.revoke('qq');
+  assert.throws(() => installer.registry(baseDirs).getTool('qq.reply'), /unknown tool/);
+  await assert.rejects(async () => installer.enable('qq'), /revoked/);
+  installer.unrevoke('qq');
+  assert.throws(() => installer.registry(baseDirs).getTool('qq.reply'), /unknown tool/);
+  installer.enable('qq');
+  assert.ok(installer.registry(baseDirs).getTool('qq.reply'));
+  installer.uninstall('qq');
+  assert.equal(installer.installed().length, 0);
+  await assert.rejects(() => installer.install('remote-revoked'), /revoked/);
   await assert.rejects(() => installer.install('bad'), /hash mismatch/);
   await assert.rejects(() => installer.install('revoked'), /revoked/);
   await assert.rejects(() => installer.install('qq', { approvedBy: 'model' }), /owner approval/);

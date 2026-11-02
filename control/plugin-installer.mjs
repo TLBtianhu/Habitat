@@ -7,6 +7,17 @@ import { PluginRegistry } from '../adapters/plugin-registry.mjs';
 import { validateManifest } from '../adapters/plugin-manifest.mjs';
 
 function canonicalJson(value) { return JSON.stringify(value, null, 2) + '\n'; }
+function matchesRevocation(list, item) {
+  return (list || []).some((entry) => {
+    if (typeof entry === 'string') return entry === item.id || entry === item.hash || entry === `${item.id}:${item.version}`;
+    return entry && (entry.id === item.id || entry.sha256 === item.hash)
+      && (!entry.version || entry.version === item.version);
+  });
+}
+function withRevocations(index, revocations) {
+  Object.defineProperty(index, 'revocationsData', { value: revocations, enumerable: false });
+  return index;
+}
 function safeJoin(root, name) {
   const target = path.resolve(root, name);
   if (target !== root && !target.startsWith(root + path.sep)) throw new Error('unsafe extraction path');
@@ -77,9 +88,23 @@ export class PluginInstaller {
     if (!crypto.verify(null, canonicalJson(index), publicKey, Buffer.from(sig.signature, 'base64'))) {
       throw new Error('plugin index signature invalid');
     }
+    let revocationsText;
+    let revocationsSigText;
+    try {
+      const revocationsUrl = new URL(index.revocations || 'revocations.json', this.indexUrl);
+      revocationsText = await this._fetch(revocationsUrl.href);
+      revocationsSigText = await this._fetch(new URL('revocations.sig.json', revocationsUrl).href);
+    } catch (error) {
+      return this._cachedIndex(error);
+    }
+    const revocations = JSON.parse(revocationsText);
+    const revocationsSig = JSON.parse(revocationsSigText);
+    if (!Array.isArray(revocations.revoked) || !crypto.verify(null, canonicalJson(revocations), publicKey, Buffer.from(revocationsSig.signature, 'base64'))) {
+      throw new Error('plugin revocations signature invalid');
+    }
     fs.mkdirSync(this.cacheDir, { recursive: true });
-    fs.writeFileSync(path.join(this.cacheDir, 'index-cache.json'), JSON.stringify({ index, sig, publicKey, fetchedAt: Date.now() }), { mode: 0o600 });
-    return index;
+    fs.writeFileSync(path.join(this.cacheDir, 'index-cache.json'), JSON.stringify({ index, sig, publicKey, revocations, revocationsSig, fetchedAt: Date.now() }), { mode: 0o600 });
+    return withRevocations(index, revocations);
   }
 
   _cachedIndex(error) {
@@ -90,7 +115,10 @@ export class PluginInstaller {
     if (!crypto.verify(null, canonicalJson(cached.index), cached.publicKey, Buffer.from(cached.sig.signature, 'base64'))) {
       throw new Error('cached plugin index signature invalid');
     }
-    return cached.index;
+    if (cached.revocations && (!Array.isArray(cached.revocations.revoked) || !crypto.verify(null, canonicalJson(cached.revocations), cached.publicKey, Buffer.from(cached.revocationsSig.signature, 'base64')))) {
+      throw new Error('cached revocations signature invalid');
+    }
+    return withRevocations(cached.index, cached.revocations || { revoked: [] });
   }
 
   async install(id, { approvedBy = 'owner' } = {}) {
@@ -98,7 +126,9 @@ export class PluginInstaller {
     const index = await this._index();
     const plugin = index.plugins.find((item) => item.id === id);
     if (!plugin) throw new Error('plugin not found: ' + id);
-    if (plugin.revoked) throw new Error('plugin revoked: ' + id);
+    if (plugin.revoked || this._revocationMatches({ id, version: plugin.version, hash: plugin.artifact.sha256 }) || matchesRevocation(index.revocationsData?.revoked, { id, version: plugin.version, hash: plugin.artifact.sha256 })) {
+      throw new Error('plugin revoked: ' + id);
+    }
     const artifact = plugin.artifact;
     const bytes = await this._fetch(artifact.url, { buffer: true });
     if (bytes.length > 512 * 1024 * 1024) throw new Error('plugin artifact too large');
@@ -121,19 +151,84 @@ export class PluginInstaller {
     fs.rmSync(installedDir, { recursive: true, force: true });
     fs.mkdirSync(path.dirname(installedDir), { recursive: true });
     fs.renameSync(staging, installedDir);
-    const metadata = { id, version: plugin.version, hash, installedAt: Date.now(), entry: plugin.entry };
+    const metadata = { id, version: plugin.version, hash, installedAt: Date.now(), entry: plugin.entry, enabled: true };
     fs.writeFileSync(path.join(this.cacheDir, 'installed', `${id}.install.json`), JSON.stringify(metadata, null, 2), { mode: 0o600 });
     return metadata;
+  }
+
+  _metadata(id) {
+    if (!/^[a-z][a-z0-9._-]*$/.test(id)) throw new Error('invalid plugin id');
+    const file = path.join(this.cacheDir, 'installed', `${id}.install.json`);
+    if (!fs.existsSync(file)) throw new Error('plugin not installed: ' + id);
+    return { file, data: JSON.parse(fs.readFileSync(file, 'utf8')) };
+  }
+
+  _localRevocations() {
+    const file = path.join(this.cacheDir, 'revocations.json');
+    if (!fs.existsSync(file)) return [];
+    return JSON.parse(fs.readFileSync(file, 'utf8')).revoked || [];
+  }
+
+  _cachedRevocations() {
+    const file = path.join(this.cacheDir, 'index-cache.json');
+    if (!fs.existsSync(file)) return [];
+    return JSON.parse(fs.readFileSync(file, 'utf8')).revocations?.revoked || [];
+  }
+
+  _revocationMatches(item) {
+    return matchesRevocation([...this._localRevocations(), ...this._cachedRevocations()], item);
   }
 
   installed() {
     const dir = path.join(this.cacheDir, 'installed');
     if (!fs.existsSync(dir)) return [];
-    return fs.readdirSync(dir).filter((f) => f.endsWith('.install.json')).map((file) => JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')));
+    return fs.readdirSync(dir).filter((f) => f.endsWith('.install.json')).map((file) => {
+      const item = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8'));
+      return { ...item, enabled: item.enabled !== false, revoked: this._revocationMatches(item) };
+    });
+  }
+
+  _setEnabled(id, enabled) {
+    const { file, data } = this._metadata(id);
+    if (enabled && this._revocationMatches(data)) throw new Error('plugin revoked: ' + id);
+    const next = { ...data, enabled, ...(enabled ? { enabledAt: Date.now() } : { disabledAt: Date.now() }) };
+    fs.writeFileSync(file, JSON.stringify(next, null, 2), { mode: 0o600 });
+    return { ...next, revoked: this._revocationMatches(next) };
+  }
+
+  disable(id) { return this._setEnabled(id, false); }
+  enable(id) { return this._setEnabled(id, true); }
+
+  revoke(id) {
+    const { data } = this._metadata(id);
+    const file = path.join(this.cacheDir, 'revocations.json');
+    const revoked = [...new Set([...this._localRevocations(), id])];
+    fs.writeFileSync(file, JSON.stringify({ schemaVersion: 1, revoked }, null, 2), { mode: 0o600 });
+    return this._setEnabled(id, false);
+  }
+
+  unrevoke(id) {
+    const file = path.join(this.cacheDir, 'revocations.json');
+    const revoked = this._localRevocations().filter((entry) => entry !== id);
+    fs.writeFileSync(file, JSON.stringify({ schemaVersion: 1, revoked }, null, 2), { mode: 0o600 });
+    return { id, revoked: this._cachedRevocations().includes(id), enabled: false };
+  }
+
+  uninstall(id) {
+    this._metadata(id);
+    fs.rmSync(path.join(this.cacheDir, 'installed', id), { recursive: true, force: true });
+    fs.rmSync(path.join(this.cacheDir, 'installed', `${id}.install.json`), { force: true });
+    return { id, uninstalled: true };
   }
 
   registry(baseDirs = [], options = {}) {
-    const dirs = this.installed().map((item) => path.join(this.cacheDir, 'installed', item.id, 'adapters'));
-    return PluginRegistry.fromDirectories([...dirs, ...baseDirs], options);
+    const installed = this.installed();
+    const installedIds = new Set(installed.map((item) => item.id));
+    const dirs = installed.filter((item) => item.enabled && !item.revoked)
+      .map((item) => path.join(this.cacheDir, 'installed', item.id, 'adapters'));
+    const excludeIds = new Set([...(options.excludeIds || []), ...installedIds]);
+    const installedRegistry = PluginRegistry.fromDirectories(dirs, options);
+    const baseRegistry = PluginRegistry.fromDirectories(baseDirs, { ...options, excludeIds });
+    return new PluginRegistry({ ...options, manifests: [...installedRegistry.list(), ...baseRegistry.list()] });
   }
 }

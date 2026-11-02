@@ -21,7 +21,20 @@ const pidDir = process.env.HABITAT_ADAPTER_STATE_DIR || '/var/lib/habitat/adapte
 fs.mkdirSync(pidDir, { recursive: true });
 const pidFile = (name) => `${pidDir}/${name}.pid`;
 
+function installedState(name) {
+  const file = path.join(installedDir, `${name}.install.json`);
+  if (!fs.existsSync(file)) return null;
+  const metadata = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const localFile = path.join(installedDir, '..', 'revocations.json');
+  const local = fs.existsSync(localFile) ? JSON.parse(fs.readFileSync(localFile, 'utf8')).revoked || [] : [];
+  const cacheFile = path.join(installedDir, '..', 'index-cache.json');
+  const cached = fs.existsSync(cacheFile) ? JSON.parse(fs.readFileSync(cacheFile, 'utf8')).revocations?.revoked || [] : [];
+  return { enabled: metadata.enabled !== false, revoked: [...local, ...cached].some((entry) => typeof entry === 'string' ? entry === name : entry?.id === name) };
+}
+
 export function start(name) {
+  const state = installedState(name);
+  if (state && (!state.enabled || state.revoked)) throw new Error('adapter disabled or revoked: ' + name);
   const m = adapters[name];
   if (!m) throw new Error('unknown adapter: ' + name);
   if (procs.has(name)) return { already: true };

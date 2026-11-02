@@ -58,6 +58,7 @@ export class PluginRegistry {
         const file = path.join(dir, name, 'manifest.json');
         if (!fs.existsSync(file)) continue;
         const manifest = validateManifest(JSON.parse(fs.readFileSync(file, 'utf8')), file);
+        if (options.excludeIds?.has(manifest.id)) continue;
         manifests.push({ ...manifest, dir: path.join(dir, name) });
       }
     }

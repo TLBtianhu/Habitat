@@ -327,6 +327,14 @@ http.createServer(async (req, res) => {
     catch (e) { return json(res, 400, { error: e.message }); }
   }
 
+  if (req.method === 'POST' && /^\/plugins\/(disable|enable|revoke|unrevoke|uninstall)$/.test(url.pathname)) {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    const p = await readJson(req);
+    const action = url.pathname.split('/').pop();
+    try { return json(res, 200, pluginInstaller[action](p.id)); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
+
   if (req.method === 'POST' && url.pathname === '/adapters/start') {
     if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
     let body = '';
