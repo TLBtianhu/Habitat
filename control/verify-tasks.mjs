@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const PORT = 9242;
 const BASE = `http://127.0.0.1:${PORT}`;
 const FILE = `/tmp/habitat-control-tasks-test-${process.pid}.json`;
+const afterFile = `/tmp/habitat-tasks-after-${process.pid}.jsonl`;
 const ownerFile = `/tmp/habitat-tasks-owner-${process.pid}.token`;
 const agentFile = `/tmp/habitat-tasks-agent-${process.pid}.token`;
 fs.writeFileSync(ownerFile, 'owner-test');
@@ -17,8 +18,8 @@ let proc;
 
 async function start() {
   proc = spawn(process.execPath, [entry], {
-    env: { ...process.env, HABITAT_CONTROL_PORT: String(PORT), HABITAT_TASKS_FILE: FILE, HABITAT_OWNER_TOKEN_FILE: ownerFile, HABITAT_AGENT_TOKEN_FILE: agentFile, HABITAT_ADAPTER_STATE_DIR: `/tmp/habitat-tasks-adapters-${process.pid}` },
-    stdio: 'inherit',
+    env: { ...process.env, HABITAT_CONTROL_PORT: String(PORT), HABITAT_TASKS_FILE: FILE, HABITAT_OWNER_TOKEN_FILE: ownerFile, HABITAT_AGENT_TOKEN_FILE: agentFile, HABITAT_ADAPTER_STATE_DIR: `/tmp/habitat-tasks-adapters-${process.pid}`, HABITAT_AFTER_ACTION_FILE: afterFile },
+    stdio: 'ignore',
   });
   for (let i = 0; i < 60; i++) {
     try { await fetch(BASE + '/status'); return; } catch { await sleep(200); }
@@ -61,4 +62,5 @@ try {
   try { fs.rmSync(ownerFile, { force: true }); } catch {}
   try { fs.rmSync(agentFile, { force: true }); } catch {}
   try { fs.rmSync(`/tmp/habitat-tasks-adapters-${process.pid}`, { recursive: true, force: true }); } catch {}
+  try { fs.rmSync(afterFile, { force: true }); } catch {}
 }
