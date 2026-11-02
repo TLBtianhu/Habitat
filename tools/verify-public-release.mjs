@@ -18,12 +18,16 @@ const required = ['LICENSE', 'NOTICE.md', 'README.md', '.gitignore', 'package.js
 for (const rel of required) {
   if (!fs.existsSync(path.join(ROOT, rel))) throw new Error('缺少公开快照文件: ' + rel);
 }
-for (const rel of ['dist', 'artifacts', 'node_modules', 'assets-packs', 'bot', 'bot-host', 'display', 'voice/runtime/python', 'voice/models', 'stage/diagnostics.json']) {
+for (const rel of ['dist', 'artifacts', 'assets-packs', 'bot', 'bot-host', 'display', 'voice/runtime/python', 'voice/models', 'stage/diagnostics.json']) {
   if (fs.existsSync(path.join(ROOT, rel))) throw new Error('公开快照含排除目录: ' + rel);
+}
+if (process.env.HABITAT_CI !== '1' && fs.existsSync(path.join(ROOT, 'node_modules'))) {
+  throw new Error('公开快照含排除目录: node_modules');
 }
 let count = 0;
 (function walk(dir) {
   for (const name of fs.readdirSync(dir)) {
+    if (process.env.HABITAT_CI === '1' && name === 'node_modules') continue;
     const file = path.join(dir, name);
     const stat = fs.statSync(file);
     if (stat.isDirectory()) { walk(file); continue; }

@@ -26,6 +26,8 @@ jobs:
         run: node tools/verify-runtime-lock.mjs
       - name: Verify public snapshot
         run: node tools/verify-public-release.mjs
+        env:
+          HABITAT_CI: 1
       - name: Core agent and memory tests
         run: |
           node agent/verify-episode.mjs
