@@ -56,6 +56,12 @@ jobs:
           node control/verify-tasks.mjs
           node control/verify-outlet-supervisor.mjs
           node control/verify-outlet-resolver.mjs
+          node control/verify-recovery.mjs
+          node control/verify-recovery-http.mjs
+      - name: Windows client lifecycle tests
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: powershell -NoProfile -File tools/win/verify-lifecycle.ps1
       - name: Skill and phase tests
         run: |
           node --test --test-force-exit runtime/skill-runtime.test.mjs

@@ -18,6 +18,10 @@ export class SkillLibrary {
     const tmp = `${this.file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify({ schemaVersion: 1, skills: this.list() }, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, this.file);
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      const owner = fs.statSync(path.dirname(this.file));
+      fs.chownSync(this.file, owner.uid, owner.gid);
+    }
   }
 
   record({ episode, write, report }) {

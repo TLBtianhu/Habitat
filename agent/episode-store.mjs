@@ -17,6 +17,10 @@ export class EpisodeStore {
     const tmp = `${file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify({ schemaVersion: 1, ...episode.snapshot() }, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, file);
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      const owner = fs.statSync(path.dirname(file));
+      fs.chownSync(file, owner.uid, owner.gid);
+    }
     return episode;
   }
 

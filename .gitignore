@@ -29,6 +29,7 @@ display/
 **/system-chat.jsonl
 **/after-action.jsonl
 **/skill-library.json
+**/lifecycle.json
 **/world-server/
 **/hls/
 !plugins/hls/**

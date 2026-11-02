@@ -1,25 +1,16 @@
-# Habitat 统一入口：稳定版启动器/关闭按钮只调用此文件。
+# Habitat Windows 统一入口：客户端、启动、停止、状态和异常恢复共用同一生命周期模块。
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)]
-  [ValidateSet('start', 'stop', 'status', 'resume')]
+  [ValidateSet('client', 'start', 'stop', 'status', 'resume')]
   [string]$Action
 )
 $ErrorActionPreference = 'Stop'
-$root = 'C:\Habitat\tools\win'
+Import-Module (Join-Path $PSScriptRoot 'lifecycle.psm1') -Force
 switch ($Action) {
-  'start' {
-    & (Join-Path $root 'start-wsl.ps1')
-    & (Join-Path $root 'resume-habitat.ps1')
-  }
-  'resume' {
-    & (Join-Path $root 'start-wsl.ps1')
-    & (Join-Path $root 'resume-habitat.ps1')
-  }
-  'status' {
-    & (Join-Path $root 'resume-habitat.ps1')
-  }
-  'stop' {
-    & (Join-Path $root 'stop-habitat.ps1')
-  }
+  'client' { & (Join-Path $PSScriptRoot 'client.ps1') }
+  'start' { Start-HabitatLifecycle }
+  'resume' { Start-HabitatLifecycle }
+  'status' { Get-HabitatLifecycleStatus }
+  'stop' { Stop-HabitatLifecycle }
 }

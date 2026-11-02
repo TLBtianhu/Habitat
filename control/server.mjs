@@ -11,6 +11,7 @@ import { loadChannelPolicy } from '../agent/residence-policy.mjs';
 import { CrossChannelTasks } from './cross-channel.mjs';
 import { AfterActionStore } from '../agent/after-action.mjs';
 import { PluginInstaller } from './plugin-installer.mjs';
+import { RecoveryManager } from './recovery.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STAGE_ORIGIN = process.env.HABITAT_STAGE || 'http://127.0.0.1:9230';
@@ -90,6 +91,7 @@ const pluginInstaller = new PluginInstaller({
   indexUrl: process.env.HABITAT_PLUGIN_INDEX_URL || 'https://github.com/TLBtianhu/habitat-plugins/releases/latest/download/index.json',
   cacheDir: process.env.HABITAT_PLUGIN_CACHE || '/var/lib/habitat/plugins',
 });
+const recovery = new RecoveryManager();
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 function json(res, code, body) {
@@ -122,6 +124,10 @@ async function postSystemChat(req, res, from) {
   try {
     fs.mkdirSync(path.dirname(CHAT_LOG), { recursive: true });
     fs.appendFileSync(CHAT_LOG, JSON.stringify(msg) + '\n', { mode: 0o600 });
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      const owner = fs.statSync(path.dirname(CHAT_LOG));
+      fs.chownSync(CHAT_LOG, owner.uid, owner.gid);
+    }
   } catch (e) {
     return json(res, 500, { error: 'chat persistence failed: ' + e.message });
   }
@@ -203,6 +209,14 @@ http.createServer(async (req, res) => {
     return;
   }
   if (req.method === 'GET' && url.pathname === '/status') return json(res, 200, state);
+  if (req.method === 'GET' && url.pathname === '/lifecycle') return json(res, 200, recovery.status());
+  if (req.method === 'POST' && url.pathname === '/recovery') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try {
+      await recovery.recover();
+      return json(res, 200, recovery.status());
+    } catch (e) { return json(res, 400, { error: e.message }); }
+  }
   if (req.method === 'GET' && url.pathname === '/presence') {
     try {
       return json(res, 200, JSON.parse(fs.readFileSync('/var/lib/habitat/pump/presence.json', 'utf8')));

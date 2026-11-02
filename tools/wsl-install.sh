@@ -15,7 +15,7 @@ ITEMS=(tools runtime agent desktop voice audio display identity director control
 
 [[ "$APP" == /opt/habitat/app && "$ETC" == /etc/habitat && "$VAR" == /var/lib/habitat ]]
 [[ -n "$RUNTIME_HOME" && -d "$RUNTIME_HOME" ]]
-mkdir -p "$APP" "$ETC" "$VAR/world-server" "$VAR/artifacts" "$VAR/logs" "$VAR/hls" "$VAR/outlets" "$VAR/adapters" "$VAR/cache/tts" "$VAR/models/tts" "$VAR/outbox" "$VAR/pump" /tmp/habitat
+mkdir -p "$APP" "$ETC" "$VAR/world-server" "$VAR/artifacts" "$VAR/logs" "$VAR/hls" "$VAR/outlets" "$VAR/adapters" "$VAR/cache/tts" "$VAR/models/tts" "$VAR/outbox" "$VAR/pump" "$VAR/plugins" "$VAR/plugins/downloads" "$VAR/plugins/installed" /tmp/habitat
 
 STAGE="$APP/.install-staging-$$"
 BACKUP="$APP/.install-backup-$$"
@@ -89,7 +89,7 @@ chmod +x "$APP/tools/wsl-pipeline-up.sh"
 if [ -f "$APP/tools/habitat.logrotate" ]; then cp "$APP/tools/habitat.logrotate" /etc/logrotate.d/habitat; fi
 
 chown "$HABITAT_USER:$HABITAT_GROUP" "$VAR" "$VAR/world-server"
-chown -R "$HABITAT_USER:$HABITAT_GROUP" "$VAR/artifacts" "$VAR/logs" "$VAR/hls" "$VAR/outlets" "$VAR/adapters" "$VAR/cache/tts" "$VAR/models" "$VAR/outbox" "$VAR/pump"
+chown -R "$HABITAT_USER:$HABITAT_GROUP" "$VAR/artifacts" "$VAR/logs" "$VAR/hls" "$VAR/outlets" "$VAR/adapters" "$VAR/cache/tts" "$VAR/models" "$VAR/outbox" "$VAR/pump" "$VAR/plugins"
 find "$VAR" -maxdepth 1 -type f -exec chown "$HABITAT_USER:$HABITAT_GROUP" {} +
 chmod -R a+rX "$APP"
 "$NODE_HOME/bin/node" --check "$APP/agent/run-continuous.mjs"

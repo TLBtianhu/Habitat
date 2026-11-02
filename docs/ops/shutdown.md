@@ -7,10 +7,13 @@
 Windows 薄启动器、稳定版关闭按钮和命令行只使用：
 
 ```powershell
-# 正常停止 Habitat 并退出 WSL
+# 打开 Windows 客户端：WSL 检测、启停和异常恢复共用同一界面
+powershell -File tools/win/habitat.ps1 -Action client
+
+# 正常停止 Habitat；不再关闭整个 WSL
 powershell -File tools/win/habitat.ps1 -Action stop
 
-# 开机后启动核心服务并做健康检查
+# 启动 WSL 与核心服务并做健康检查
 powershell -File tools/win/habitat.ps1 -Action start
 
 # 只读健康检查，不改变运行状态
@@ -28,9 +31,9 @@ powershell -File tools/win/habitat.ps1 -Action resume
 2. **停止出口与适配器**：Outlet Supervisor 停止编码进程并等待真实退出；QQ/B站/MC 适配器由 adapter host 停止；B站与 QQ WebSocket 均正常 close 优先，1 秒后有界 terminate，避免停止后残留连接。
 3. **停止音频与桌面生产**：Voice、Audio Mixer、Desktop 停止新的合成和捕获，已有磁盘缓存保留。
 4. **停止控制面和舞台**：Control、Stage 以及已知旧 Habitat 单元最后退出。
-5. **退出 WSL**：只有上述服务全部正常停止后，Windows 才停止 keepalive 并执行 `wsl --shutdown`。
+5. **保留 WSL 与其他工作**：Habitat 服务停止后，不执行全局 `wsl --shutdown`；只有使用专用发行版且主人明确选择时，才允许单独终止该发行版。
 
-**任何服务停不干净时，取消 `wsl --shutdown` 并报告失败，不强关整个 VM。** Outlet 子进程的超时升级只由 Supervisor 在自己的实例内执行，不能扩大成随意杀进程。
+**任何服务停不干净时，报告失败并保留诊断，不强关整个 VM。** Outlet 子进程的超时升级只由 Supervisor 在自己的实例内执行，不能扩大成随意杀进程。
 
 ## DSH / 稳定版程序怎么退出
 
@@ -50,9 +53,8 @@ powershell -File tools/win/habitat.ps1 -Action resume
 
 ## 本次实测
 
-- 正常停机后 `wsl --list --verbose` 显示 `Ubuntu Stopped`，keepalive 为 0；
-- Agent 日志出现 `AgentLoop stopped cleanly`；
-- 冷启动健康检查通过：Control、Desktop、Voice、Audio、Outlet Supervisor 全部恢复；
+- Windows 客户端执行真实停止后，所有 Habitat 单元均为 inactive，WSL 仍保持运行，没有全局关机；
+- 客户端再次启动后 `lifecycle.state=running`、`lastShutdownAbnormal=false`、无待恢复项，QQ 恢复 ready；
 - 默认音色、聊天水位、任务状态保留；HLS/RTMP 和捕获没有自动重启。
 
 ## 发行验收还应覆盖

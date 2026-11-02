@@ -1,6 +1,6 @@
 # Habitat 运维手册
 
-> 正常停机与恢复统一使用 `tools/win/habitat.ps1 -Action stop|start|status|resume`，详见 [shutdown.md](shutdown.md)。
+> Windows 客户端使用 `tools/win/habitat.ps1 -Action client`；命令行启停与恢复统一使用 `-Action start|stop|status|resume`，详见 [shutdown.md](shutdown.md)。
 
 ## 启动顺序
 

@@ -7,10 +7,10 @@ USER_NAME="${HABITAT_USER:-tlb3}"
 NODE_HOME="$(getent passwd "$USER_NAME" | cut -d: -f6)/opt/node22"
 
 getent passwd "$USER_NAME" >/dev/null
-for dir in "$VAR" "$VAR/outbox" "$VAR/pump" "$VAR/logs" "$VAR/hls" "$VAR/outlets" "$VAR/adapters" "$VAR/cache/tts" "$VAR/models" "$VAR/world-server"; do
+for dir in "$VAR" "$VAR/outbox" "$VAR/pump" "$VAR/logs" "$VAR/hls" "$VAR/outlets" "$VAR/adapters" "$VAR/cache/tts" "$VAR/models" "$VAR/world-server" "$VAR/plugins" "$VAR/plugins/downloads" "$VAR/plugins/installed"; do
   runuser -u "$USER_NAME" -- test -w "$dir"
 done
-for file in "$VAR/control-tasks.json" "$VAR/system-chat.jsonl" "$VAR/utterances.jsonl" "$VAR/agent-system-chat.json" "$VAR/outbox/agent.json" "$VAR/pump/system-chat.json"; do
+for file in "$VAR/control-tasks.json" "$VAR/system-chat.jsonl" "$VAR/utterances.jsonl" "$VAR/agent-system-chat.json" "$VAR/outbox/agent.json" "$VAR/pump/system-chat.json" "$VAR/lifecycle.json" "$VAR/skill-library.json"; do
   if [ -e "$file" ]; then runuser -u "$USER_NAME" -- test -w "$file"; fi
 done
 
