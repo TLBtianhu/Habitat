@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "hls",
+  "name": "hls",
+  "displayName": "本地 HLS Outlet",
+  "kind": "hls",
+  "version": "0.2.0",
+  "lifecycle": "outlet",
+  "session": { "kind": "hls", "surface": false },
+  "capabilities": ["outlet.hls"],
+  "scopes": ["outlet.hls"],
+  "tools": [],
+  "permissions": ["outlet.hls"]
+}
