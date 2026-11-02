@@ -71,6 +71,26 @@ export class Episode {
     return write;
   }
 
+  resolveWrite(id, { outcome, reportId = null }) {
+    const write = this.pendingWrites.find((w) => w.id === id);
+    if (!write) throw new Error('pending write not found');
+    const status = {
+      verified_success: 'confirmed',
+      verified_failure: 'failed',
+      verified_partial: 'partial',
+      unknown: 'unknown',
+    }[outcome];
+    if (!status) throw new Error('invalid write outcome');
+    write.status = status;
+    write.outcome = outcome;
+    write.reportId = reportId;
+    write.resolvedAt = Date.now();
+    write.lastCheckedAt = write.resolvedAt;
+    if (status === 'confirmed') write.confirmedAt = write.resolvedAt;
+    this.touch();
+    return write;
+  }
+
   snapshot() {
     return {
       id: this.id,

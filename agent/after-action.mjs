@@ -12,13 +12,13 @@ export function verifyChecks(checks = []) {
   if (!checks.length) return { outcome: 'unknown', memoryWrite: false, checks: [] };
   const normalized = checks.map((check) => ({
     name: String(check.name || 'check'),
-    ok: check.ok === true,
+    ok: check.ok === true ? true : check.ok === false ? false : null,
     optional: check.optional === true,
     evidence: check.evidence,
   }));
-  if (normalized.some((check) => check.ok === false && check.optional !== true)) return { outcome: 'verified_failure', memoryWrite: false, checks: normalized };
-  if (normalized.some((check) => !hasEvidence(check.evidence))) return { outcome: 'unknown', memoryWrite: false, checks: normalized };
-  if (normalized.some((check) => check.optional === true)) return { outcome: 'verified_partial', memoryWrite: false, checks: normalized };
+  if (normalized.some((check) => check.ok === false && check.optional !== true && hasEvidence(check.evidence))) return { outcome: 'verified_failure', memoryWrite: false, checks: normalized };
+  if (normalized.some((check) => check.ok === null || !hasEvidence(check.evidence))) return { outcome: 'unknown', memoryWrite: false, checks: normalized };
+  if (normalized.some((check) => check.optional === true && check.ok === false)) return { outcome: 'verified_partial', memoryWrite: false, checks: normalized };
   return { outcome: 'verified_success', memoryWrite: true, checks: normalized };
 }
 

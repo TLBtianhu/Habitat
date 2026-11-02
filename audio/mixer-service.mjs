@@ -67,7 +67,7 @@ async function readJson(req) {
   return JSON.parse(text || '{}');
 }
 function publicCapture(c) {
-  return { id: c.id, baseline: c.baseline, queuedMs: Math.round(c.queue.length / (RATE * CHANNELS * 2) * 1000), streaming: !!c.res };
+  return { id: c.id, consumer: c.consumer || null, instanceId: c.instanceId || null, baseline: c.baseline, queuedMs: Math.round(c.queue.length / (RATE * CHANNELS * 2) * 1000), streaming: !!c.res };
 }
 function stopPollIfIdle() {
   if (!captures.size && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
@@ -140,11 +140,20 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (req.method === 'POST' && url.pathname === '/capture/open') {
+      const input = await readJson(req);
       const current = await (await fetch(`${VOICE}/utterances`)).json();
       const baseline = current.reduce((max, u) => Math.max(max, u.id), 0);
       if (!voiceWatermark) voiceWatermark = baseline;
       const id = crypto.randomUUID();
-      captures.set(id, { id, baseline, queue: Buffer.alloc(0), res: null, streamTimer: null });
+      captures.set(id, {
+        id,
+        consumer: String(input.consumer || 'unknown').slice(0, 64),
+        instanceId: input.instanceId ? String(input.instanceId).slice(0, 80) : null,
+        baseline,
+        queue: Buffer.alloc(0),
+        res: null,
+        streamTimer: null,
+      });
       if (!pollTimer) pollTimer = setInterval(pollVoice, 250);
       return json(res, 200, { id, baseline, format: { codec: 's16le', rate: RATE, channels: CHANNELS } });
     }
@@ -162,7 +171,7 @@ const server = http.createServer(async (req, res) => {
         'cache-control': 'no-store',
         'x-audio-format': `s16le;rate=${RATE};channels=${CHANNELS}`,
       });
-      req.on('close', () => { closeCapture(c.id); });
+      res.on('close', () => { closeCapture(c.id); });
       startStream(c, res);
       return;
     }

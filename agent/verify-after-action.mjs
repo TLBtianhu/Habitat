@@ -7,6 +7,7 @@ assert.equal(verifyChecks([{ name: 'bad', ok: false, evidence: 'HTTP 500' }]).ou
 assert.equal(verifyChecks([{ name: 'ok', ok: true, evidence: 'id-1' }]).outcome, 'verified_success');
 assert.equal(verifyChecks([{ name: 'missing', ok: true, evidence: null }]).outcome, 'unknown');
 assert.equal(verifyChecks([{ name: 'optional', ok: false, optional: true, evidence: 'degraded' }]).outcome, 'verified_partial');
+assert.equal(verifyChecks([{ name: 'optional', ok: true, optional: true, evidence: 'ok' }]).outcome, 'verified_success');
 
 const file = `/tmp/habitat-after-action-test-${process.pid}.jsonl`;
 try {

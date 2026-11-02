@@ -126,13 +126,13 @@ function start(name) {
       cwd: target.cwd,
       stdio: 'ignore',
       detached: false,
-      env: { ...process.env, HABITAT_NODE: process.execPath, FB_HLS: name === 'hls' ? '1' : '0' },
+      env: { ...process.env, HABITAT_NODE: process.execPath, HABITAT_OUTLET_INSTANCE_ID: id, FB_HLS: name === 'hls' ? '1' : '0' },
     })
     : spawn('/usr/bin/env', ['bash', target.script], {
       cwd: target.cwd,
       stdio: 'ignore',
       detached: false,
-      env: { ...process.env, HABITAT_NODE: process.execPath, FB_HLS: name === 'hls' ? '1' : '0' },
+      env: { ...process.env, HABITAT_NODE: process.execPath, HABITAT_OUTLET_INSTANCE_ID: id, FB_HLS: name === 'hls' ? '1' : '0' },
     });
   const instance = {
     id, name, child, state: 'starting', startedAt: Date.now(), stopRequested: false,

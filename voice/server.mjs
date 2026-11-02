@@ -36,6 +36,9 @@ function publicUtterance(u) {
     durationMs: u.durationMs || null,
     hash: u.hash || null,
     error: u.error || null,
+    playback: u.playback || null,
+    lastServedAt: u.lastServedAt || null,
+    servedCount: u.servedCount || 0,
     audioUrl: `/voice/utterances/${u.id}/audio`,
     createdAt: u.createdAt,
   };
@@ -112,6 +115,9 @@ function restoreUtterances() {
       durationMs: m.durationMs || null,
       hash: m.hash || null,
       bytes: m.bytes || null,
+      playback: m.playback || null,
+      lastServedAt: m.lastServedAt || null,
+      servedCount: m.servedCount || 0,
       createdAt: m.createdAt || Date.now(),
     });
     nextId = Math.max(nextId, m.id + 1);
@@ -260,11 +266,30 @@ const server = http.createServer(async (req, res) => {
       const u = utterances.get(Number(statusMatch[1]));
       return u ? json(res, 200, publicUtterance(u)) : json(res, 404, { error: 'utterance not found' });
     }
+    const playbackMatch = url.pathname.match(/^\/utterances\/(\d+)\/playback$/);
+    if (req.method === 'POST' && playbackMatch) {
+      if ((req.headers.authorization || '') !== `Bearer ${OWNER_TOKEN}`) return json(res, 403, { error: 'owner required' });
+      const u = utterances.get(Number(playbackMatch[1]));
+      if (!u) return json(res, 404, { error: 'utterance not found' });
+      const p = await readJson(req);
+      if (!['started', 'completed', 'failed', 'cancelled'].includes(p.state)) return json(res, 400, { error: 'invalid playback state' });
+      if (u.status !== 'ready' || !u.lastServedAt) return json(res, 409, { error: 'audio has not been served' });
+      if (p.state === 'completed') {
+        if (u.playback?.state !== 'started') return json(res, 409, { error: 'playback has not started' });
+        if (u.durationMs && Date.now() - u.playback.at < u.durationMs * 0.5) return json(res, 409, { error: 'playback completed too early' });
+      }
+      u.playback = { state: p.state, at: Date.now(), error: String(p.error || '').slice(0, 300) || null };
+      persist(u);
+      return json(res, 200, publicUtterance(u));
+    }
     const audioMatch = url.pathname.match(/^\/utterances\/(\d+)\/audio$/);
     if (req.method === 'GET' && audioMatch) {
       const u = utterances.get(Number(audioMatch[1]));
       if (!u) return json(res, 404, { error: 'utterance not found' });
       await synthesize(u);
+      u.lastServedAt = Date.now();
+      u.servedCount = (u.servedCount || 0) + 1;
+      persist(u);
       res.writeHead(200, {
         'content-type': 'audio/wav',
         'content-length': u.bytes,

@@ -9,6 +9,10 @@ import { SystemChatClient } from '../clients/system-chat.mjs';
 import { Memory } from './memory.mjs';
 import { ResidenceMemoryStore } from './residence-memory-store.mjs';
 import { EpisodeStore } from './episode-store.mjs';
+import { ActionTracker } from './action-tracker.mjs';
+import { AfterActionStore } from './after-action.mjs';
+import { SkillLibrary } from './skill-library.mjs';
+import { voiceSpeakChecks, outletStartChecks, outletStopChecks } from './action-verifiers.mjs';
 import { ContextAssembler } from './memory-slice.mjs';
 import { Initiative } from './initiative.mjs';
 import { AppSessionManager } from './app-session.mjs';
@@ -19,7 +23,7 @@ import { ResidencePresence } from './residence-presence.mjs';
 import { InstalledPluginSupervisor } from './installed-plugin-supervisor.mjs';
 import { loadChannelPolicy } from './residence-policy.mjs';
 import { start as adapterStart, stop as adapterStop } from '../control/adapter-host.mjs';
-import { start as outletStart, stop as outletStop } from '../control/outlet-host.mjs';
+import { start as outletStart, stop as outletStop, status as outletStatus } from '../control/outlet-host.mjs';
 
 const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const session = new AppSessionManager();
@@ -125,16 +129,43 @@ const broker = {
   call: async (verb, args) => {
     if (verb === 'app.open') {
       const id = args.id || args.kind;
+      if (id === 'hls') {
+        return actionTracker.track({
+          kind: 'outlet.start',
+          args: { id },
+          run: async () => {
+            const started = await registry.start(id);
+            const opened = commit(session.open(id, { kind: registry.get(id).session?.kind }));
+            return { ...opened, instanceId: started.instanceId, outlet: started };
+          },
+        });
+      }
       await registry.start(id);
       return commit(session.open(id, { kind: args.kind || registry.get(id).session?.kind }));
     }
     if (verb === 'app.focus') return commit(session.focus(args.id));
     if (verb === 'app.background') return commit(session.background(args.id));
     if (verb === 'app.close') {
+      if (args.id === 'hls') {
+        return actionTracker.track({
+          kind: 'outlet.stop',
+          args: { id: 'hls' },
+          run: async () => {
+            const stopped = await registry.stop('hls');
+            const closed = commit(session.close('hls'));
+            return { ...closed, ...stopped, instanceId: stopped.instanceId, outlet: stopped };
+          },
+        });
+      }
       await registry.stop(args.id);
       return commit(session.close(args.id));
     }
     if (verb === 'app.restart') {
+      if (args.id === 'hls') {
+        const stopped = await broker.call('app.close', { id: 'hls' });
+        const started = await broker.call('app.open', { id: 'hls' });
+        return { stopped, started };
+      }
       await registry.stop(args.id);
       await registry.start(args.id);
       return commit(session.restart(args.id));
@@ -145,6 +176,14 @@ const broker = {
     const idempotencyKey = currentEventIds.length && ['system.say', 'voice.speak', 'mc.say', 'qq.reply'].includes(verb) && !args.idempotencyKey
       ? `${verb}:${currentEventIds.join(',')}`
       : args.idempotencyKey;
+    if (verb === 'voice.speak') {
+      return actionTracker.track({
+        kind: verb,
+        args,
+        residenceId: 'system',
+        run: () => registry.call(verb, { ...args, idempotencyKey }),
+      });
+    }
     return registry.call(verb, { ...args, idempotencyKey });
   },
 };
@@ -165,6 +204,39 @@ const currentEpisode = episodeStore.get(episodeId) || episodeStore.create({
 if (currentEpisode.status === 'paused') currentEpisode.resume();
 if (bilibiliRuntime?.roomId) currentEpisode.addParticipant(`bilibili.room.${bilibiliRuntime.roomId}`);
 episodeStore.save(currentEpisode);
+const afterAction = new AfterActionStore({ file: process.env.HABITAT_AFTER_ACTION_FILE || '/var/lib/habitat/after-action.jsonl' });
+const skillLibrary = new SkillLibrary({ file: process.env.HABITAT_SKILL_LIBRARY || '/var/lib/habitat/skill-library.json' });
+const actionTracker = new ActionTracker({ episode: currentEpisode, episodeStore, afterAction, skillLibrary });
+const pipelineStatusFile = process.env.HABITAT_PIPELINE_STATUS || '/var/lib/habitat/artifacts/pipeline.json';
+const hlsPlaylistFile = process.env.HABITAT_HLS_PLAYLIST || '/var/lib/habitat/hls/live.m3u8';
+const readPipeline = () => JSON.parse(fs.readFileSync(pipelineStatusFile, 'utf8'));
+const fetchJson = async (url) => {
+  const response = await fetch(url, { signal: AbortSignal.timeout(5000) });
+  if (!response.ok) throw new Error(`evidence HTTP ${response.status}`);
+  return response.json();
+};
+actionTracker.register('voice.speak',
+  (write, result) => voiceSpeakChecks(write, result, { voice }),
+  (result) => ({ utteranceId: result?.utterance?.id || null }));
+actionTracker.register('outlet.start',
+  (write, result) => outletStartChecks(write, result, {
+    outletStatus,
+    readPipeline,
+    playlistExists: () => fs.existsSync(hlsPlaylistFile),
+  }),
+  (result) => ({ instanceId: result?.instanceId || null }));
+actionTracker.register('outlet.stop',
+  (write, result) => outletStopChecks(write, result, {
+    outletStatus,
+    readPipeline,
+    desktopCaptures: () => fetchJson((process.env.HABITAT_DESKTOP_URL || 'http://127.0.0.1:9260') + '/captures'),
+    audioStatus: () => fetchJson((process.env.HABITAT_AUDIO_URL || 'http://127.0.0.1:9271') + '/status'),
+  }),
+  (result) => ({ instanceId: result?.instanceId || null }));
+await actionTracker.reconcile({ minIntervalMs: 0 });
+const actionReconcileTimer = setInterval(() => {
+  actionTracker.reconcile().catch((error) => console.log('after-action reconcile error', error.message));
+}, 5000);
 const contextAssembler = new ContextAssembler({ store: memory.store, episode: currentEpisode });
 const initiative = new Initiative({ quietMs: 30000, dailyQuota: 6 });
 const loop = new AgentLoop({ broker, decider, memory, initiative });
@@ -261,6 +333,7 @@ async function shutdown() {
   clearInterval(tickTimer);
   clearInterval(onebotStatusTimer);
   clearInterval(presenceTimer);
+  clearInterval(actionReconcileTimer);
   await pluginSupervisor.stop();
   await pump.stop();
   const runtimeStops = await registry.stopAll();

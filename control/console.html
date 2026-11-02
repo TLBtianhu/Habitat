@@ -209,7 +209,15 @@ let audioQueue = [];
 let audioPlaying = false;
 let audioPollBusy = false;
 let currentAudioSource = null;
+let currentAudioCancelled = false;
 let lastUtteranceId = 0;
+async function reportPlayback(id, state, error = '') {
+  try {
+    await post('/voice/utterances/' + id + '/playback', { state, error });
+  } catch (e) {
+    stateEl.textContent = '播放证据回报失败：' + e.message;
+  }
+}
 function updateAudioButton() {
   const button = document.getElementById('audio');
   if (!button) return;
@@ -269,6 +277,7 @@ function disableAudio() {
   audioQueue = [];
   audioPlaying = false;
   try { currentAudioSource?.stop(); } catch {}
+  currentAudioCancelled = true;
   currentAudioSource = null;
   if (audioCtx) audioCtx.close().catch(() => {});
   audioCtx = null;
@@ -304,14 +313,19 @@ async function playNextAudio() {
     source.buffer = decoded;
     source.connect(audioCtx.destination);
     currentAudioSource = source;
+    currentAudioCancelled = false;
     source.onended = () => {
+      const state = currentAudioCancelled ? 'cancelled' : 'completed';
+      reportPlayback(id, state);
       audioPlaying = false;
       currentAudioSource = null;
       playNextAudio();
     };
     source.start();
+    reportPlayback(id, 'started');
   } catch (e) {
     stateEl.textContent = '语音播放失败：' + e.message;
+    reportPlayback(id, 'failed', e.message);
     audioPlaying = false;
     playNextAudio();
   }

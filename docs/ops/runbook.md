@@ -95,7 +95,8 @@ curl http://127.0.0.1:9270/health
 - Kokoro 模型在 `/var/lib/habitat/models/tts/kokoro-multi-lang-v1_0/`，需要时显式运行 `bash tools/install-kokoro.sh`，普通升级不自动下载；
 - 没有音频消费者时只保留文字，不调用 TTS；
 - 第一次拉取音频才合成，之后复用缓存；
-- Utterance：`/var/lib/habitat/utterances.jsonl`；
+- Utterance：`/var/lib/habitat/utterances.jsonl`；播放开始/完成/取消/失败由 owner 控制台回报，没有完成证据时 AfterAction 保持 unknown；
+- AfterAction：`/var/lib/habitat/after-action.jsonl`；验证成功的步骤元数据：`/var/lib/habitat/skill-library.json`；
 - WAV 缓存：`/var/lib/habitat/cache/tts/`；
 - 大肥鱼授权 VoiceProfile、流式首段合成、多总线混音尚未接入；
 - `audio/mixer-service.mjs` 已提供独立连续音轨：`127.0.0.1:9271`，统一输出 48kHz 双声道 PCM；无消费者不拉取语音，无讲话时输出静音；

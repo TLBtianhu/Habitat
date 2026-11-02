@@ -54,7 +54,7 @@ function requireAgent(req) {
   }
 }
 function validateOpen(p) {
-  const allowed = new Set(['schemaVersion', 'consumer', 'consumerApp', 'source', 'excludeSurfaces', 'fps']);
+  const allowed = new Set(['schemaVersion', 'consumer', 'consumerApp', 'source', 'excludeSurfaces', 'fps', 'instanceId']);
   for (const key of Object.keys(p)) {
     if (!allowed.has(key)) {
       const e = new Error('unknown capture field: ' + key);
@@ -75,6 +75,11 @@ function validateOpen(p) {
   }
   if (p.consumerApp != null && !idPattern.test(String(p.consumerApp))) {
     const e = new Error('invalid consumerApp');
+    e.code = 400;
+    throw e;
+  }
+  if (p.instanceId != null && !idPattern.test(String(p.instanceId))) {
+    const e = new Error('invalid instanceId');
     e.code = 400;
     throw e;
   }

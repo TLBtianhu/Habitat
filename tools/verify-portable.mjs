@@ -18,7 +18,7 @@ for (const rel of ['node22/bin/node', 'jdk21/bin/java', 'chrome/chrome-headless-
 for (const rel of ['node_modules/ws/package.json', 'node_modules/@resvg/resvg-js/package.json']) {
   if (!fs.existsSync(path.join(app, rel))) throw new Error('portable production dependency missing: ' + rel);
 }
-for (const rel of ['.tmp', 'dist', 'artifacts', 'memory', 'episodes', 'outbox', 'pump', 'system-chat.jsonl', 'control-tasks.json', 'after-action.jsonl', 'utterances.jsonl', 'stage/diagnostics.json']) {
+for (const rel of ['.tmp', 'dist', 'artifacts', 'memory', 'episodes', 'outbox', 'pump', 'system-chat.jsonl', 'control-tasks.json', 'after-action.jsonl', 'skill-library.json', 'utterances.jsonl', 'stage/diagnostics.json']) {
   if (fs.existsSync(path.join(app, rel))) throw new Error('portable app contains runtime state: ' + rel);
 }
 fs.mkdirSync(data, { recursive: true });
