@@ -44,24 +44,53 @@ export class PluginInstaller {
   }
 
   async _fetch(url, { buffer = false } = {}) {
-    const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error(`plugin fetch failed: HTTP ${response.status}`);
-    if (buffer) return Buffer.from(await response.arrayBuffer());
-    return response.text();
+    let lastError;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error(`plugin fetch failed: HTTP ${response.status}`);
+        return buffer ? Buffer.from(await response.arrayBuffer()) : response.text();
+      } catch (error) {
+        lastError = error;
+        if (attempt < 1) await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+    const output = execFileSync('curl', ['-L', '--fail', '--retry', '2', '--retry-delay', '1', '--max-time', '30', '-fsS', url], {
+      maxBuffer: 512 * 1024 * 1024,
+    });
+    return buffer ? output : output.toString('utf8');
   }
 
   async _index() {
-    const [indexText, sigText, publicKey] = await Promise.all([
-      this._fetch(this.indexUrl),
-      this._fetch(new URL('index.sig.json', this.indexUrl).href),
-      this._fetch(new URL('release-public-key.pem', this.indexUrl).href),
-    ]);
+    let indexText;
+    let sigText;
+    let publicKey;
+    try {
+      indexText = await this._fetch(this.indexUrl);
+      sigText = await this._fetch(new URL('index.sig.json', this.indexUrl).href);
+      publicKey = await this._fetch(new URL('release-public-key.pem', this.indexUrl).href);
+    } catch (error) {
+      return this._cachedIndex(error);
+    }
     const index = JSON.parse(indexText);
     const sig = JSON.parse(sigText);
     if (!crypto.verify(null, canonicalJson(index), publicKey, Buffer.from(sig.signature, 'base64'))) {
       throw new Error('plugin index signature invalid');
     }
+    fs.mkdirSync(this.cacheDir, { recursive: true });
+    fs.writeFileSync(path.join(this.cacheDir, 'index-cache.json'), JSON.stringify({ index, sig, publicKey, fetchedAt: Date.now() }), { mode: 0o600 });
     return index;
+  }
+
+  _cachedIndex(error) {
+    const file = path.join(this.cacheDir, 'index-cache.json');
+    if (!fs.existsSync(file)) throw error;
+    const cached = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (Date.now() - cached.fetchedAt > 24 * 60 * 60 * 1000) throw error;
+    if (!crypto.verify(null, canonicalJson(cached.index), cached.publicKey, Buffer.from(cached.sig.signature, 'base64'))) {
+      throw new Error('cached plugin index signature invalid');
+    }
+    return cached.index;
   }
 
   async install(id, { approvedBy = 'owner' } = {}) {

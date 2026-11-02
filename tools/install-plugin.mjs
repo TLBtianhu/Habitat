@@ -10,7 +10,7 @@ const response = await fetch(control + '/plugins/install', {
   method: 'POST',
   headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
   body: JSON.stringify({ id }),
-  signal: AbortSignal.timeout(30000),
+  signal: AbortSignal.timeout(180000),
 });
 const result = await response.json();
 if (!response.ok) throw new Error(result.error || `plugin install failed: ${response.status}`);

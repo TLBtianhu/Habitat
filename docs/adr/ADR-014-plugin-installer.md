@@ -19,6 +19,13 @@
 - GitHub Actions：Linux/Windows 主 CI 与 runtime-smoke 全部通过；
 - `habitat-plugins` 仓库 CI：构建、签名、哈希和独立加载全部通过。
 
+## 实际远程安装
+
+- 已从 `habitat-plugins` 的真实 GitHub 签名索引和 Release 制品安装 QQ、B站、MC 三个应用；
+- Registry 实际发现 `qq.reply`、`mc.obs`、`mc.say`、`mc.look`、`mc.stop`；
+- 已验签索引缓存在本地 24 小时，远程暂时不可用时只复用已验证内容；无效签名不回退；
+- 下载支持 Node fetch 重试和 curl 回退，所有制品仍必须验证 SHA256。
+
 ## 使用
 
 ```bash

@@ -74,6 +74,7 @@ try {
   assert.equal(installed.id, 'qq');
   assert.equal(installer.installed().length, 1);
   assert.ok(installer.registry().getTool('qq.reply'));
+  assert.equal(installer._cachedIndex(new Error('offline')).plugins[0].id, 'qq');
   await assert.rejects(() => installer.install('bad'), /hash mismatch/);
   await assert.rejects(() => installer.install('revoked'), /revoked/);
   await assert.rejects(() => installer.install('qq', { approvedBy: 'model' }), /owner approval/);
