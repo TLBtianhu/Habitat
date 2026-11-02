@@ -20,7 +20,10 @@ async function start() {
     env: { ...process.env, HABITAT_CONTROL_PORT: String(PORT), HABITAT_TASKS_FILE: FILE, HABITAT_OWNER_TOKEN_FILE: ownerFile, HABITAT_AGENT_TOKEN_FILE: agentFile, HABITAT_ADAPTER_STATE_DIR: `/tmp/habitat-tasks-adapters-${process.pid}` },
     stdio: 'ignore',
   });
-  await sleep(350);
+  for (let i = 0; i < 60; i++) {
+    try { await fetch(BASE + '/status'); return; } catch { await sleep(200); }
+  }
+  throw new Error('control did not become ready');
 }
 async function stop() {
   if (!proc || proc.exitCode !== null || proc.signalCode) return;
