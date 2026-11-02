@@ -4,7 +4,7 @@ import { AfterActionStore, verifyChecks } from './after-action.mjs';
 import { EpisodeStore } from './episode-store.mjs';
 import { ActionTracker } from './action-tracker.mjs';
 import { SkillLibrary } from './skill-library.mjs';
-import { voiceSpeakChecks, outletStartChecks, outletStopChecks } from './action-verifiers.mjs';
+import { voiceSpeakChecks, outletStartChecks, outletStopChecks, qqReplyChecks } from './action-verifiers.mjs';
 
 const root = `/tmp/habitat-action-tracking-${process.pid}`;
 const sleep = () => Promise.resolve();
@@ -20,6 +20,21 @@ try {
   voiceState.playback = { state: 'completed', at: 10 };
   checks = await voiceSpeakChecks({ data: { refs: { utteranceId: 7 } } }, null, { voice });
   assert.equal(verifyChecks(checks).outcome, 'verified_success');
+
+  const qqRuntime = { onebotClient: { getMsg: async () => ({ message_id: 99 }) } };
+  const qqWrite = { data: { refs: { messageId: 99 }, residenceId: 'qq.group.test' } };
+  checks = await qqReplyChecks(qqWrite, { message_id: 99, residenceId: 'qq.group.test' }, { qqRuntime });
+  assert.equal(verifyChecks(checks).outcome, 'verified_success');
+  checks = await qqReplyChecks(qqWrite, { message_id: 99, residenceId: 'qq.group.test', deduped: true }, { qqRuntime });
+  assert.equal(verifyChecks(checks).outcome, 'unknown', '去重结果不能记成一次新的发送技能');
+  const historyRuntime = {
+    onebotClient: {
+      getMsg: async () => { throw new Error('message cache expired'); },
+      getGroupMsgHistory: async () => [{ message_id: 99 }],
+    },
+  };
+  checks = await qqReplyChecks(qqWrite, { message_id: 99, residenceId: 'qq.group.test' }, { qqRuntime: historyRuntime });
+  assert.equal(verifyChecks(checks).outcome, 'verified_success', '群历史可作为缓存丢失后的真实证据');
 
   const startIo = {
     outletStatus: async () => ({ hls: { instanceId: 'I1', running: true, state: 'running', pid: 10 } }),
@@ -75,6 +90,18 @@ try {
   });
   await assert.rejects(() => failed, /actual failure/);
   assert.equal(skillLibrary.list()[0].successCount, 1, '失败不能增加技能成功计数');
+
+  episode = episodeStore.create({ id: 'E3', goal: 'dedupe intent', participants: ['system'] });
+  const dedupe = new ActionTracker({ episode, episodeStore, afterAction, skillLibrary });
+  let dedupeRuns = 0;
+  dedupe.register('demo.action', async () => [{ name: 'evidence', ok: true, evidence: 'ready' }], () => ({}));
+  const dedupeArgs = { idempotencyKey: 'K1' };
+  const first = await dedupe.track({ kind: 'demo.action', args: dedupeArgs, run: async () => { dedupeRuns++; return { ok: true }; } });
+  const second = await dedupe.track({ kind: 'demo.action', args: dedupeArgs, run: async () => { dedupeRuns++; return { ok: true, deduped: true }; } });
+  assert.equal(dedupeRuns, 2);
+  assert.equal(second.deduped, true);
+  assert.equal(second.afterAction.id, first.afterAction.id);
+  assert.equal(episode.pendingWrites.length, 1, '同一 idempotencyKey 只能有一个 pending write');
 
   episode = episodeStore.create({ id: 'E2', goal: 'recover report', participants: ['system'] });
   const pending = episode.addPendingWrite('demo.action', { args: {}, residenceId: 'system' });

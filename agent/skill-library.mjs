@@ -26,7 +26,7 @@ export class SkillLibrary {
       return { recorded: false, reason: 'verified_success_required' };
     }
     if (!episode.canRead(report.residenceId || 'system')) return { recorded: false, reason: 'residence_not_in_episode' };
-    const parameterNames = Object.keys(write.data?.args || {}).sort();
+    const parameterNames = Object.keys(write.data?.args || {}).filter((key) => key !== 'idempotencyKey').sort();
     const id = 'procedure:' + crypto.createHash('sha256').update(write.kind + '\0' + parameterNames.join(',')).digest('hex').slice(0, 24);
     const previous = this.skills.get(id);
     const skill = {

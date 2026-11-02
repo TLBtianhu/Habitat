@@ -17,7 +17,16 @@ export class ActionTracker {
   async track({ kind, args = {}, residenceId = 'system', run }) {
     const registration = this.verifiers.get(kind);
     if (!registration) throw new Error('action verifier not registered: ' + kind);
-    const write = this.episode.addPendingWrite(kind, { args, residenceId });
+    const idempotencyKey = args.idempotencyKey || null;
+    if (idempotencyKey) {
+      const existing = this.episode.pendingWrites.find((write) => write.data?.idempotencyKey === idempotencyKey && write.status !== 'duplicate');
+      if (existing) {
+        const result = await run();
+        const report = this.afterAction.list().filter((item) => item.taskId === existing.id).at(-1) || null;
+        return { result, afterAction: report, deduped: true };
+      }
+    }
+    const write = this.episode.addPendingWrite(kind, { args, residenceId, idempotencyKey });
     this.episodeStore.save(this.episode);
     try {
       const result = await run();
@@ -51,6 +60,22 @@ export class ActionTracker {
   async reconcile({ minIntervalMs = 5000 } = {}) {
     const reports = this.afterAction.list();
     let changed = 0;
+    const intents = new Set();
+    for (const write of this.episode.pendingWrites) {
+      const key = write.data?.idempotencyKey || write.data?.args?.idempotencyKey
+        || (write.kind === 'qq.reply' && write.data?.refs?.messageId ? `message:${write.data.refs.messageId}` : write.id);
+      if (intents.has(key)) {
+        if (['pending', 'unknown', 'partial'].includes(write.status)) {
+          write.status = 'duplicate';
+          write.duplicateOf = key;
+          write.lastCheckedAt = this.now();
+          changed++;
+        }
+        continue;
+      }
+      intents.add(key);
+    }
+    if (changed) this.episodeStore.save(this.episode);
     for (const write of this.episode.pendingWrites) {
       if (!['pending', 'unknown', 'partial'].includes(write.status)) continue;
       if (this.now() - (write.lastCheckedAt || write.at) < minIntervalMs) continue;

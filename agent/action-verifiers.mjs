@@ -27,6 +27,27 @@ export async function voiceSpeakChecks(write, result, { voice }) {
   ];
 }
 
+export async function qqReplyChecks(write, result, { qqRuntime }) {
+  const messageId = result?.message_id || result?.messageId || write.data?.refs?.messageId;
+  if (!messageId) return [{ name: 'send_accepted', ok: false, evidence: result?.error || 'missing message_id' }];
+  let stored = null;
+  try { stored = await qqRuntime?.onebotClient?.getMsg(messageId); } catch {}
+  const residenceId = result?.residenceId || write.data?.residenceId;
+  if (!stored?.message_id && residenceId?.startsWith('qq.group.')) {
+    try {
+      const history = await qqRuntime?.onebotClient?.getGroupMsgHistory(Number(residenceId.split('.').at(-1)));
+      const messages = history?.messages || history || [];
+      stored = messages.find((message) => Number(message.message_id) === Number(messageId)) || null;
+    } catch {}
+  }
+  return [
+    { name: 'send_accepted', ok: true, evidence: `message:${messageId}` },
+    { name: 'message_stored', ok: stored?.message_id != null ? true : null, evidence: stored?.message_id ? `message:${stored.message_id}` : null },
+    { name: 'residence_bound', ok: residenceId === write.data?.residenceId && !!residenceId, evidence: residenceId || null },
+    { name: 'not_a_duplicate', ok: result?.deduped ? null : true, evidence: result?.deduped ? 'deduped existing result' : 'new result or stored late evidence' },
+  ];
+}
+
 export async function outletStartChecks(write, result, {
   outletStatus,
   readPipeline,

@@ -45,6 +45,10 @@ export class AfterActionStore {
       createdAt: Date.now(),
     };
     fs.appendFileSync(this.file, JSON.stringify(report) + '\n', { mode: 0o600 });
+    if (typeof process.getuid === 'function' && process.getuid() === 0) {
+      const owner = fs.statSync(path.dirname(this.file));
+      fs.chownSync(this.file, owner.uid, owner.gid);
+    }
     return report;
   }
 

@@ -12,7 +12,7 @@ import { EpisodeStore } from './episode-store.mjs';
 import { ActionTracker } from './action-tracker.mjs';
 import { AfterActionStore } from './after-action.mjs';
 import { SkillLibrary } from './skill-library.mjs';
-import { voiceSpeakChecks, outletStartChecks, outletStopChecks } from './action-verifiers.mjs';
+import { voiceSpeakChecks, outletStartChecks, outletStopChecks, qqReplyChecks } from './action-verifiers.mjs';
 import { ContextAssembler } from './memory-slice.mjs';
 import { Initiative } from './initiative.mjs';
 import { AppSessionManager } from './app-session.mjs';
@@ -176,10 +176,18 @@ const broker = {
     const idempotencyKey = currentEventIds.length && ['system.say', 'voice.speak', 'mc.say', 'qq.reply'].includes(verb) && !args.idempotencyKey
       ? `${verb}:${currentEventIds.join(',')}`
       : args.idempotencyKey;
+    if (verb === 'qq.reply') {
+      return actionTracker.track({
+        kind: verb,
+        args: { ...args, idempotencyKey },
+        residenceId: currentResidence?.residenceId || 'qq.unknown',
+        run: () => registry.call(verb, { ...args, idempotencyKey }),
+      });
+    }
     if (verb === 'voice.speak') {
       return actionTracker.track({
         kind: verb,
-        args,
+        args: { ...args, idempotencyKey },
         residenceId: 'system',
         run: () => registry.call(verb, { ...args, idempotencyKey }),
       });
@@ -218,6 +226,9 @@ const fetchJson = async (url) => {
 actionTracker.register('voice.speak',
   (write, result) => voiceSpeakChecks(write, result, { voice }),
   (result) => ({ utteranceId: result?.utterance?.id || null }));
+actionTracker.register('qq.reply',
+  (write, result) => qqReplyChecks(write, result, { qqRuntime }),
+  (result) => ({ messageId: result?.message_id || result?.messageId || null }));
 actionTracker.register('outlet.start',
   (write, result) => outletStartChecks(write, result, {
     outletStatus,
