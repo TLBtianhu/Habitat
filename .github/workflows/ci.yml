@@ -85,6 +85,14 @@ jobs:
         with:
           path: C:\habitat-runtime-cache\runtime.tar.gz
           key: habitat-runtime-${{ hashFiles('runtime/lock.json') }}
+      - name: Provision WSL for Setup acceptance
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: |
+          $distros = wsl -l -q
+          if ($LASTEXITCODE -ne 0 -or -not ($distros -match 'Ubuntu')) {
+            wsl --install -d Ubuntu --no-launch
+          }
       - name: Seed Setup runtime archive
         if: matrix.os == 'windows-latest'
         shell: bash
