@@ -18,7 +18,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $script:WslUser = (wsl -d Ubuntu -- whoami).Trim()
 if ($script:WslUser -eq 'root') {
-  wsl -d Ubuntu -u root -- bash -lc "id -u habitat >/dev/null 2>&1 || useradd -m habitat"
+  wsl -d Ubuntu -u root -- bash -lc "id -u habitat >/dev/null 2>&1 || useradd -m habitat; chown -R habitat:habitat /home/habitat"
   if ($LASTEXITCODE -ne 0) { throw '无法创建非 root Habitat 用户' }
   $script:WslUser = 'habitat'
 }
