@@ -1,4 +1,4 @@
-# Habitat Setup/Console EXE 真实安装验收：使用独立 WSL 实例和测试注册表项。
+﻿# Habitat Setup/Console EXE 真实安装验收：使用独立 WSL 实例和测试注册表项。
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $payloadRoot = Join-Path $root 'dist\win'
