@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'd
 for (const required of [
   'agent/run-continuous.mjs', 'clients/mcpfabric-token.mjs', 'package.json', 'package-lock.json',
   'tools/install-user.ps1', 'tools/install.mjs', 'tools/wsl-install.sh', 'tools/verify-install.sh',
+  'node_modules/ws/package.json', 'node_modules/@resvg/resvg-js/package.json',
 ]) assert.ok(fs.existsSync(path.join(root, required)), 'missing ' + required);
 for (const forbidden of ['tools/bridge.mjs', 'display/server.mjs']) {
   assert.equal(fs.existsSync(path.join(root, forbidden)), false, 'forbidden ' + forbidden);
@@ -26,6 +27,7 @@ assert.ok(wslInstall.includes('HABITAT_USER'));
 let scanned = 0;
 (function walk(dir) {
   for (const name of fs.readdirSync(dir)) {
+    if (name === 'node_modules') continue;
     const file = path.join(dir, name);
     const stat = fs.statSync(file);
     if (stat.isDirectory()) { walk(file); continue; }

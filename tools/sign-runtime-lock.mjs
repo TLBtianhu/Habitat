@@ -27,7 +27,7 @@ function canonical(file) {
 }
 const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
 lock.sbomSha256 = crypto.createHash('sha256').update(canonical(path.join(ROOT, 'runtime', 'sbom.json'))).digest('hex');
-fs.writeFileSync(lockPath, canonical(lockPath));
+fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
 const signature = crypto.sign(null, canonical(lockPath), privateKey).toString('base64');
 fs.writeFileSync(path.join(ROOT, 'runtime', 'lock.sig.json'), JSON.stringify({
   algorithm: 'Ed25519',

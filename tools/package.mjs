@@ -38,10 +38,18 @@ function copy(rel) {
 
 for (const rel of INCLUDE) copy(rel);
 
+// 便携版必须自包含：只安装并携带生产依赖，不携带开发目录或开发依赖。
+execFileSync(process.platform === 'win32' ? (process.env.comspec || 'cmd.exe') : 'npm',
+  process.platform === 'win32'
+    ? ['/c', 'npm', 'ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund']
+    : ['ci', '--omit=dev', '--ignore-scripts', '--no-audit', '--no-fund'],
+  { cwd: STAGE, stdio: 'inherit' });
+
 let count = 0;
 let textCount = 0;
 (function walk(dir) {
   for (const name of fs.readdirSync(dir)) {
+    if (name === 'node_modules') continue;
     const file = path.join(dir, name);
     const stat = fs.statSync(file);
     if (stat.isDirectory()) { walk(file); continue; }

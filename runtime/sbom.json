@@ -44,7 +44,7 @@
       "type": "application",
       "license": "LGPL-2.1-or-later",
       "distribution": "media",
-      "included": true,
+      "included": false,
       "source": "Ubuntu FFmpeg"
     },
     {

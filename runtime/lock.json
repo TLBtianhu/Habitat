@@ -6,7 +6,7 @@
   "source": "https://www.modelscope.cn/datasets/TLBtianhu/Habitat-Dist/resolve/master/runtime/habitat-runtime-core-0.1.0.tar.gz",
   "sha256": "4dcc8b381c15f5bb82d083dd7a50d85104af91c4d4ace1db5a1d162879d740fb",
   "sbom": "runtime/sbom.json",
-  "sbomSha256": "fccd3cbbed6503fa52c538db886c9a6f46728e0fe8bf00dc780fc2e9e0f47456",
+  "sbomSha256": "2ba40a66f8ac8444c1f47527f43d830ba472419231e7eb2cf6cc1413ddd31fde",
   "signature": {
     "algorithm": "Ed25519",
     "file": "runtime/lock.sig.json",
@@ -44,7 +44,7 @@
       "path": "ffmpeg",
       "sha256": "ed16af623947494a72e284b6eb8ff225f2da22b38b5d5069c2fd4b4ba3384e41",
       "license": "LGPL-2.1-or-later",
-      "required": true
+      "required": false
     },
     {
       "id": "sherpa-onnx",

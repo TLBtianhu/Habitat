@@ -69,3 +69,44 @@ jobs:
           name: habitat-portable-${{ matrix.os }}
           path: dist/fishbowl-v0.1.zip
           if-no-files-found: error
+
+  runtime-smoke:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Cache runtime archive
+        uses: actions/cache@v4
+        with:
+          path: /tmp/habitat-runtime-cache/runtime.tar.gz
+          key: habitat-runtime-${{ hashFiles('runtime/lock.json') }}
+      - name: Download runtime archive if needed
+        run: |
+          mkdir -p /tmp/habitat-runtime-cache
+          if [ ! -f /tmp/habitat-runtime-cache/runtime.tar.gz ]; then
+            curl -L --fail --retry 3 -o /tmp/habitat-runtime-cache/runtime.tar.gz "https://www.modelscope.cn/datasets/TLBtianhu/Habitat-Dist/resolve/master/runtime/habitat-runtime-core-0.1.0.tar.gz"
+          fi
+      - name: Install runtime from lockfile
+        run: node tools/fetch-runtime.mjs /tmp/habitat-portable-runtime
+        env:
+          HABITAT_RUNTIME_ARCHIVE: /tmp/habitat-runtime-cache/runtime.tar.gz
+      - name: Install locked app dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build portable app
+        run: node tools/package.mjs
+      - name: Verify clean portable installation
+        run: |
+          rm -rf /tmp/habitat-portable
+          mkdir -p /tmp/habitat-portable
+          python3 - <<'PY'
+          import zipfile
+          with zipfile.ZipFile('dist/fishbowl-v0.1.zip') as z:
+              z.extractall('/tmp/habitat-portable')
+          PY
+          mv /tmp/habitat-portable/Fishbowl /tmp/habitat-portable/app
+          cp -a /tmp/habitat-portable-runtime /tmp/habitat-portable/runtime
+          node tools/verify-portable.mjs /tmp/habitat-portable

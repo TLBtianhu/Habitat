@@ -16,4 +16,4 @@ node tools/sign-runtime-lock.mjs
 
 签名私钥默认在 `/etc/habitat/release-signing-private.pem`（mode 600）。公开仓库只包含公钥和签名，不包含私钥。
 
-运行时按 core/media/voice/app 分包，不能用“最新版本”覆盖 lockfile。新增运行时版本必须重新生成 SBOM、签名、撤销检查与干净目录安装验收。
+运行时按 core/media/voice/app 分包，不能用“最新版本”覆盖 lockfile。FFmpeg 当前是独立 media 依赖，不包含在 core 测试包中。新增运行时版本必须重新生成 SBOM、签名、撤销检查与干净目录安装验收。
