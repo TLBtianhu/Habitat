@@ -97,7 +97,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
-          wsl bash -lc "mkdir -p /mnt/c/habitat-runtime-cache && if [ ! -f /mnt/c/habitat-runtime-cache/runtime.tar.gz ]; then curl -L --fail --retry 3 -o /mnt/c/habitat-runtime-cache/runtime.tar.gz 'https://www.modelscope.cn/datasets/TLBtianhu/Habitat-Dist/resolve/master/runtime/habitat-runtime-core-0.1.0.tar.gz'; fi && cp /mnt/c/habitat-runtime-cache/runtime.tar.gz /tmp/habitat-runtime-core.tar.gz"
+          wsl bash -lc "mkdir -p /mnt/c/habitat-runtime-cache && if [ ! -f /mnt/c/habitat-runtime-cache/runtime.tar.gz ]; then curl -L --fail --retry 3 -o /mnt/c/habitat-runtime-cache/runtime.tar.gz 'https://github.com/TLBtianhu/Habitat/releases/download/runtime-v0.1.1/habitat-runtime-core-0.1.1.tar.gz'; fi && cp /mnt/c/habitat-runtime-cache/runtime.tar.gz /tmp/habitat-runtime-core-0.1.1.tar.gz"
       - name: Setup EXE acceptance
         if: matrix.os == 'windows-latest'
         shell: powershell
@@ -134,7 +134,7 @@ jobs:
         run: |
           mkdir -p /tmp/habitat-runtime-cache
           if [ ! -f /tmp/habitat-runtime-cache/runtime.tar.gz ]; then
-            curl -L --fail --retry 3 -o /tmp/habitat-runtime-cache/runtime.tar.gz "https://www.modelscope.cn/datasets/TLBtianhu/Habitat-Dist/resolve/master/runtime/habitat-runtime-core-0.1.0.tar.gz"
+            curl -L --fail --retry 3 -o /tmp/habitat-runtime-cache/runtime.tar.gz "https://github.com/TLBtianhu/Habitat/releases/download/runtime-v0.1.1/habitat-runtime-core-0.1.1.tar.gz"
           fi
       - name: Install runtime from lockfile
         run: node tools/fetch-runtime.mjs /tmp/habitat-portable-runtime

@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "bundle": "habitat-runtime-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "platform": "linux-x64",
-  "source": "https://www.modelscope.cn/datasets/TLBtianhu/Habitat-Dist/resolve/master/runtime/habitat-runtime-core-0.1.0.tar.gz",
-  "sha256": "4dcc8b381c15f5bb82d083dd7a50d85104af91c4d4ace1db5a1d162879d740fb",
+  "source": "https://github.com/TLBtianhu/Habitat/releases/download/runtime-v0.1.1/habitat-runtime-core-0.1.1.tar.gz",
+  "sha256": "763b102ceb5ffad8a7a382194f0dc749596140d3a0fbdf7bd0b81e13531ba65c",
   "sbom": "runtime/sbom.json",
-  "sbomSha256": "2ba40a66f8ac8444c1f47527f43d830ba472419231e7eb2cf6cc1413ddd31fde",
+  "sbomSha256": "05b0135089a5d54c0d8ef6f60e174b3aeba42c326f9cfd850be213fd42b5ecb6",
   "signature": {
     "algorithm": "Ed25519",
     "file": "runtime/lock.sig.json",
@@ -36,6 +36,14 @@
       "path": "chrome/chrome-headless-shell-linux64/chrome-headless-shell",
       "sha256": "d34f5d1962280380a576c40cd50139f11d0ed0cfb17f69dad37e8cc8fd2b73fa",
       "license": "BSD-3-Clause",
+      "required": true
+    },
+    {
+      "id": "chrome-libs",
+      "version": "1",
+      "path": "chrome-libs/SHA256SUMS",
+      "sha256": "082bdaa9c25d3700761313e96ab54bd7864d11dceb232bf148ae96214411525d",
+      "license": "see chrome-libs/licenses",
       "required": true
     },
     {

@@ -1,12 +1,12 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:habitat-core-runtime-0.1.0",
+  "serialNumber": "urn:uuid:habitat-core-runtime-0.1.1",
   "version": 1,
   "metadata": {
     "component": {
       "name": "habitat-runtime-core",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "type": "application"
     }
   },
@@ -37,6 +37,15 @@
       "distribution": "media",
       "included": true,
       "source": "Google Chrome for Testing"
+    },
+    {
+      "name": "chrome-libs",
+      "version": "1",
+      "type": "library",
+      "license": "see chrome-libs/licenses",
+      "distribution": "media",
+      "included": true,
+      "source": "Ubuntu shared library dependencies"
     },
     {
       "name": "ffmpeg",

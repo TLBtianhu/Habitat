@@ -48,12 +48,29 @@ function verifyRuntime(root) {
     const actual = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
     if (actual !== component.sha256) throw new Error(`component hash mismatch: ${component.id}`);
   }
+  const libSums = path.join(root, 'chrome-libs', 'SHA256SUMS');
+  if (fs.existsSync(libSums)) {
+    for (const line of fs.readFileSync(libSums, 'utf8').split(/\r?\n/).filter(Boolean)) {
+      const [expected, name] = line.split(/\s{2,}/);
+      const file = path.join(root, 'chrome-libs', name);
+      const actual = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+      if (actual !== expected) throw new Error('chrome library hash mismatch: ' + name);
+    }
+  }
+  const runtimeEnv = {
+    ...process.env,
+    LD_LIBRARY_PATH: [
+      path.join(root, 'chrome-libs'),
+      path.join(root, 'chrome', 'chrome-headless-shell-linux64'),
+      process.env.LD_LIBRARY_PATH || '',
+    ].filter(Boolean).join(':'),
+  };
   for (const [name, cmd, args] of [
     ['node', `${root}/node22/bin/node`, ['--version']],
     ['java', `${root}/jdk21/bin/java`, ['-version']],
     ['chrome', `${root}/chrome/chrome-headless-shell-linux64/chrome-headless-shell`, ['--version']],
   ]) {
-    console.log(name, execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim() || 'ok');
+    console.log(name, execFileSync(cmd, args, { encoding: 'utf8', env: runtimeEnv, stdio: ['ignore', 'pipe', 'pipe'] }).trim() || 'ok');
   }
 }
 

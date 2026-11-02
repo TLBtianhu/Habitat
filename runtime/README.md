@@ -1,8 +1,10 @@
 # Habitat 运行时包
 
-当前核心运行时测试包托管于 ModelScope：
+当前核心运行时测试包托管于 GitHub Releases：
 
-- `habitat-runtime-core-0.1.0.tar.gz`：<https://www.modelscope.cn/datasets/TLBtianhu/Habitat-Dist/resolve/master/runtime/habitat-runtime-core-0.1.0.tar.gz>
+- `habitat-runtime-core-0.1.1.tar.gz`：<https://github.com/TLBtianhu/Habitat/releases/download/runtime-v0.1.1/habitat-runtime-core-0.1.1.tar.gz>
+
+0.1.1 额外包含 Chrome 所需的 31 个共享库及逐文件 SHA256，不能依赖宿主系统库。
 
 `lock.json` 固定平台、版本、组件和哈希；`sbom.json` 记录组件、许可证和分包边界；`lock.sig.json` 是 lockfile 的 Ed25519 签名；`revocations.json` 用于撤销不再允许的包。
 

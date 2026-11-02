@@ -12,7 +12,7 @@
 ## 分包边界
 
 - 'core-runtime'：Node、核心 npm 依赖和必要本地库；
-- 'media-runtime'：Chrome/FFmpeg/Resvg；
+- 'media-runtime'：Chrome/FFmpeg/Resvg；Chrome 所需共享库也随包分发并逐文件校验，不依赖宿主系统库；
 - 'voice-runtime'：Python/sherpa-onnx/Kokoro；
 - 'app-runtime'：QQ/B站/MC 等应用插件的独立依赖。
 

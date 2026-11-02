@@ -50,7 +50,7 @@ try {
   if ($RuntimeUrl) {
     if ([string]::IsNullOrWhiteSpace($RuntimeSha256)) { throw 'RuntimeUrl 必须同时提供 RuntimeSha256' }
     $uri = [uri]$RuntimeUrl
-    if ($uri.Scheme -ne 'https' -or $uri.Host -notin @('www.modelscope.cn', 'hf-mirror.com', 'huggingface.co')) {
+    if ($uri.Scheme -ne 'https' -or $uri.Host -notin @('www.modelscope.cn', 'hf-mirror.com', 'huggingface.co', 'github.com')) {
       throw 'RuntimeUrl 只允许 HTTPS 的官方/镜像源'
     }
     $needDownload = $true
