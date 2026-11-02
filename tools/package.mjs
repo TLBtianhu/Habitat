@@ -75,7 +75,12 @@ for (const forbidden of ['tools/bridge.mjs', 'display/server.mjs']) {
 
 fs.mkdirSync(DIST, { recursive: true });
 if (fs.existsSync(ZIP)) fs.rmSync(ZIP);
-execFileSync(process.platform === 'win32' ? 'tar.exe' : 'tar', ['-a', '-c', '-f', ZIP, '-C', path.dirname(STAGE), 'Fishbowl'], { stdio: 'inherit' });
+execFileSync(process.platform === 'win32' ? 'tar.exe' : 'zip',
+  process.platform === 'win32'
+    ? ['-a', '-c', '-f', ZIP, '-C', path.dirname(STAGE), 'Fishbowl']
+    : ['-qr', ZIP, 'Fishbowl'],
+  { cwd: path.dirname(STAGE), stdio: 'inherit' });
+if (fs.readFileSync(ZIP).subarray(0, 2).toString() !== 'PK') throw new Error('portable package is not a ZIP archive');
 
 const kb = Math.round(fs.statSync(ZIP).size / 1024);
 console.log(`package: ${ZIP} · ${count} files (${textCount} scanned) · ${kb} KB`);
