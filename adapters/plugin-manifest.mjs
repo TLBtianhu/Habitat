@@ -1,7 +1,7 @@
 // AdapterManifest 的最小严格校验：声明、工具、权限和生命周期必须可对账。
 const ID = /^[a-z][a-z0-9._-]{0,63}$/;
 const TOOL = /^[a-z][a-z0-9._-]*\.[a-z][a-z0-9._-]+$/;
-const LIFECYCLES = new Set(['adapter', 'outlet', 'client', 'declarative']);
+const LIFECYCLES = new Set(['adapter', 'provider', 'outlet', 'client', 'declarative']);
 const CONCURRENCY = new Set(['serial', 'exclusive', 'parallel']);
 const IDEMPOTENCY = new Set(['required', 'per-intent', 'none']);
 const TOP_LEVEL = new Set([

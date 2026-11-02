@@ -15,7 +15,7 @@ import { ContextAssembler } from './memory-slice.mjs';
 import { Initiative } from './initiative.mjs';
 import { AppSessionManager } from './app-session.mjs';
 import { publishSessionSnapshot } from '../desktop/session-store.mjs';
-import { PluginRegistry } from '../adapters/plugin-registry.mjs';
+import { PluginInstaller } from '../control/plugin-installer.mjs';
 import { DurableEventPump } from './durable-event-pump.mjs';
 import { BiliConnectionSupervisor } from '../clients/bilibili-supervisor.mjs';
 import { OneBotConnectionSupervisor } from '../clients/onebot-supervisor.mjs';
@@ -36,7 +36,7 @@ const onebotToken = String(process.env.NAPCAT_TOKEN || '').trim() || (
   fs.existsSync('/etc/habitat/napcat.token') ? fs.readFileSync('/etc/habitat/napcat.token', 'utf8').trim() : ''
 );
 const onebotClient = new OneBotClient({ httpUrl: process.env.HABITAT_ONEBOT_HTTP_URL || 'http://127.0.0.1:3003', accessToken: onebotToken });
-const registry = PluginRegistry.fromDirectories([
+const registry = new PluginInstaller({ cacheDir: process.env.HABITAT_PLUGIN_CACHE || '/var/lib/habitat/plugins' }).registry([
   path.join(APP_ROOT, 'adapters'),
   path.join(APP_ROOT, 'plugins'),
 ], {

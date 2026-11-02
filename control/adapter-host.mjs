@@ -1,10 +1,22 @@
 // Adapter Host：按 manifest 启停独立进程，Core 不需要跟着重启
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 import { loadAdapters } from '../adapters/registry.mjs';
+import { validateManifest } from '../adapters/plugin-manifest.mjs';
 
 const procs = new Map();
 const adapters = loadAdapters();
+const installedDir = process.env.HABITAT_PLUGIN_CACHE ? path.join(process.env.HABITAT_PLUGIN_CACHE, 'installed') : '/var/lib/habitat/plugins/installed';
+if (fs.existsSync(installedDir)) {
+  for (const file of fs.readdirSync(installedDir).filter((name) => name.endsWith('.install.json'))) {
+    const metadata = JSON.parse(fs.readFileSync(path.join(installedDir, file), 'utf8'));
+    const dir = path.join(installedDir, metadata.id, 'adapters', metadata.id);
+    const manifestPath = path.join(dir, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) continue;
+    adapters[metadata.id] = { ...validateManifest(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), manifestPath), dir };
+  }
+}
 const pidDir = process.env.HABITAT_ADAPTER_STATE_DIR || '/var/lib/habitat/adapters';
 fs.mkdirSync(pidDir, { recursive: true });
 const pidFile = (name) => `${pidDir}/${name}.pid`;

@@ -132,8 +132,8 @@ export class PluginInstaller {
     return fs.readdirSync(dir).filter((f) => f.endsWith('.install.json')).map((file) => JSON.parse(fs.readFileSync(path.join(dir, file), 'utf8')));
   }
 
-  registry(baseDirs = []) {
+  registry(baseDirs = [], options = {}) {
     const dirs = this.installed().map((item) => path.join(this.cacheDir, 'installed', item.id, 'adapters'));
-    return PluginRegistry.fromDirectories([...dirs, ...baseDirs]);
+    return PluginRegistry.fromDirectories([...dirs, ...baseDirs], options);
   }
 }

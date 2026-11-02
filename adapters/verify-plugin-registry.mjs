@@ -46,6 +46,8 @@ await assert.rejects(() => registry.call('missing.tool', {}), /unknown tool/);
 
 await registry.start('hls');
 await registry.stop('hls');
+await registry.start('bilibili');
+await registry.stop('bilibili');
 await registry.start('qq');
 await registry.stop('qq');
 assert.deepEqual(calls.outlet.map((x) => x[0]), ['start', 'stop']);

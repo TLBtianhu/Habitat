@@ -73,7 +73,17 @@ try {
   const installed = await installer.install('qq');
   assert.equal(installed.id, 'qq');
   assert.equal(installer.installed().length, 1);
-  assert.ok(installer.registry().getTool('qq.reply'));
+  const registry = installer.registry([], {
+    outboxFile: `${cacheDir}/outbox.json`,
+    providerContext: {
+      onebotClient: { sendGroupMsg: async () => ({ message_id: 42 }) },
+      policy: { authorizeReply: () => ({ allowed: true, reason: 'owner_test' }), noteOutput: () => {} },
+      getResidenceContext: () => ({ kind: 'group', peerId: '123', residenceId: 'qq.group.123' }),
+    },
+  });
+  await registry.start('qq');
+  assert.equal((await registry.call('qq.reply', { text: 'installed' })).message_id, 42);
+  await registry.stop('qq');
   assert.equal(installer._cachedIndex(new Error('offline')).plugins[0].id, 'qq');
   await assert.rejects(() => installer.install('bad'), /hash mismatch/);
   await assert.rejects(() => installer.install('revoked'), /revoked/);
