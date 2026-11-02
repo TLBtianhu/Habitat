@@ -1,4 +1,4 @@
-# 流水线的监工：进程退出才重启（事件驱动，不探活）
+﻿# 流水线的监工：进程退出才重启（事件驱动，不探活）
 $ErrorActionPreference = 'SilentlyContinue'
 $log = 'C:\Habitat\artifacts\pipeline.log'
 $err = 'C:\Habitat\artifacts\pipeline.err'

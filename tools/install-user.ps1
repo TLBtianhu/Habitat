@@ -1,4 +1,4 @@
-# Habitat 用户态安装器：默认不提权，应用/数据/配置独立，不修改全局 WSL 配置。
+﻿# Habitat 用户态安装器：默认不提权，应用/数据/配置独立，不修改全局 WSL 配置。
 param(
   [Parameter(Mandatory=$true)][string]$PackagePath,
   [string]$InstallRoot = '',
@@ -47,10 +47,48 @@ try {
     if ($uri.Scheme -ne 'https' -or $uri.Host -notin @('www.modelscope.cn', 'hf-mirror.com', 'huggingface.co')) {
       throw 'RuntimeUrl 只允许 HTTPS 的官方/镜像源'
     }
-    wsl -d Ubuntu -- bash -lc "curl --fail --location --proto '=https' '$RuntimeUrl' -o '$InstallRoot/data/runtime.tar.gz'"
-    if ($LASTEXITCODE -ne 0) { throw '运行时下载失败' }
+    $needDownload = $true
+    $archiveExists = (wsl -d Ubuntu -- bash -lc "test -f '$InstallRoot/data/runtime.tar.gz' && printf yes || printf no").Trim()
+    if ($archiveExists -eq 'yes') {
+      $existing = (wsl -d Ubuntu -- bash -lc "sha256sum '$InstallRoot/data/runtime.tar.gz' | cut -d' ' -f1").Trim()
+      if ($existing -eq $RuntimeSha256) { $needDownload = $false }
+    }
+    if ($needDownload) {
+      wsl -d Ubuntu -- bash -lc "mkdir -p '$InstallRoot/data' && curl --fail --location --proto '=https' '$RuntimeUrl' -o '$InstallRoot/data/runtime.tar.gz'"
+      if ($LASTEXITCODE -ne 0) { throw '运行时下载失败' }
+    }
     wsl -d Ubuntu -- bash -lc "printf '%s  %s\n' '$RuntimeSha256' '$InstallRoot/data/runtime.tar.gz' | sha256sum -c -"
     if ($LASTEXITCODE -ne 0) { throw '运行时 SHA256 校验失败' }
+    $entries = wsl -d Ubuntu -- bash -lc "tar -tzf '$InstallRoot/data/runtime.tar.gz'"
+    if ($entries.Count -gt 20000) { throw '运行时文件数过多' }
+    foreach ($name in $entries) {
+      $normalized = $name.Replace('\', '/')
+      if ($normalized.StartsWith('/') -or $normalized -match '^[A-Za-z]:' -or $normalized.Split('/') -contains '..') {
+        throw "运行时包含不安全路径: $normalized"
+      }
+    }
+    $linkCheck = @'
+runtime="$1"
+tar -tvzf "$runtime/data/runtime.tar.gz" | while IFS= read -r line; do
+  case "$line" in
+    l*|h*)
+      source_part="${line%% -> *}"; source_part="${source_part%% link to *}"
+      target="${line##* -> }"; target="${target##* link to }"
+      source="${source_part##* }"
+      case "$target" in /*) echo 'absolute runtime link rejected' >&2; exit 1;; esac
+      resolved=$(realpath -m "$runtime/$(dirname "$source")/$target")
+      case "$resolved" in "$runtime"/*) ;; *) echo 'runtime link escapes root' >&2; exit 1;; esac
+      ;;
+  esac
+done
+'@
+    $linkScript = Join-Path $tmp 'runtime-links.sh'
+    [System.IO.File]::WriteAllText($linkScript, $linkCheck, (New-Object System.Text.UTF8Encoding($false)))
+    $wslScript = '/mnt/' + $linkScript.Substring(0, 1).ToLower() + $linkScript.Substring(2).Replace('\', '/')
+    wsl -d Ubuntu -- bash $wslScript $InstallRoot
+    if ($LASTEXITCODE -ne 0) { throw '运行时链接校验失败' }
+    wsl -d Ubuntu -- bash -lc "mkdir -p '$InstallRoot/runtime' && tar -xzf '$InstallRoot/data/runtime.tar.gz' -C '$InstallRoot/runtime' && HABITAT_RUNTIME_ARCHIVE='$InstallRoot/data/runtime.tar.gz' '$InstallRoot/runtime/node22/bin/node' '$InstallRoot/app/tools/fetch-runtime.mjs' '$InstallRoot/runtime'"
+    if ($LASTEXITCODE -ne 0) { throw '运行时 lock/SBOM/组件验收失败' }
   } else {
     Write-Output '未提供 RuntimeUrl：应用层已安装，运行时需另行按 manifest 校验安装'
   }

@@ -7,6 +7,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'd
 for (const required of [
   'agent/run-continuous.mjs', 'clients/mcpfabric-token.mjs', 'package.json', 'package-lock.json',
   'tools/install-user.ps1', 'tools/install.mjs', 'tools/wsl-install.sh', 'tools/verify-install.sh',
+  'tools/build-win-exe.mjs', 'tools/win/setup.ps1', 'tools/win/HabitatSetup.cs', 'tools/win/HabitatConsole.cs',
+  'tools/verify-win-release.mjs',
   'node_modules/ws/package.json', 'node_modules/@resvg/resvg-js/package.json',
 ]) assert.ok(fs.existsSync(path.join(root, required)), 'missing ' + required);
 for (const forbidden of ['tools/bridge.mjs', 'display/server.mjs']) {
@@ -17,6 +19,7 @@ const installer = fs.readFileSync(path.join(root, 'tools/install-user.ps1'), 'ut
 assert.ok(installer.includes('.local/share/habitat'));
 assert.equal(installer.includes('-u root'), false);
 assert.ok(installer.includes('RuntimeSha256'));
+assert.ok(installer.includes('fetch-runtime.mjs'));
 const installMjs = fs.readFileSync(path.join(root, 'tools/install.mjs'), 'utf8');
 assert.ok(installMjs.includes('LOCALAPPDATA'));
 const wslInstall = fs.readFileSync(path.join(root, 'tools/wsl-install.sh'), 'utf8');

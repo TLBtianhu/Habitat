@@ -1,4 +1,4 @@
-# 桥的监工：进程退出才重启（事件驱动，不探活）
+﻿# 桥的监工：进程退出才重启（事件驱动，不探活）
 $ErrorActionPreference = 'SilentlyContinue'
 $bridge = 'C:\Habitat\tools\bridge.mjs'
 $log = 'C:\Habitat\artifacts\bridge.log'

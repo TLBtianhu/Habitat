@@ -21,4 +21,10 @@
 - 配置与用户数据放 '%APPDATA%/Habitat'，大模型/缓存放 '%LOCALAPPDATA%/Habitat/cache'；
 - 卸载默认保留配置、记忆、模型和用户数据，只有明确 purge 才清理。
 
+### Windows 只保留两个 EXE
+
+- `HabitatSetup.exe`：安装、升级、回滚和卸载；默认当前用户，不要求管理员；
+- `HabitatConsole.exe`：打开 Windows 控制台，不承载 AgentLoop、插件进程或推流；
+- 不在 Windows 分别安装 QQ、MC、语音等后台服务；这些客户端与它们真正的服务器按部署拓扑连接。
+
 开发用编译中间物，日常用安装版或便携版；开发者和普通用户不是同一顶帽子。

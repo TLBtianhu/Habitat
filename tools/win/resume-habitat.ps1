@@ -1,4 +1,4 @@
-# Habitat 健康检查：只读，不启动 Outlet，不修改用户状态。
+﻿# Habitat 健康检查：只读，不启动 Outlet，不修改用户状态。
 $ErrorActionPreference = 'Stop'
 $deadline = (Get-Date).AddSeconds(45)
 $checks = @(

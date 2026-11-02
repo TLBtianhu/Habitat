@@ -1,4 +1,4 @@
-# 看门狗：探活靠桥的 /status；不健康就让 provider 重启（不直接调 wsl）
+﻿# 看门狗：探活靠桥的 /status；不健康就让 provider 重启（不直接调 wsl）
 $ErrorActionPreference = 'SilentlyContinue'
 $log = 'C:\Habitat\artifacts\health.log'
 New-Item -ItemType Directory -Force -Path (Split-Path $log) | Out-Null
