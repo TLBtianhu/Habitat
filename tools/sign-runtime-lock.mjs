@@ -22,10 +22,13 @@ if (fs.existsSync(privatePath)) {
 fs.writeFileSync(publicPath, publicKey.export({ type: 'spki', format: 'pem' }));
 
 const lockPath = path.join(ROOT, 'runtime', 'lock.json');
+function canonical(file) {
+  return JSON.stringify(JSON.parse(fs.readFileSync(file, 'utf8')), null, 2) + '\n';
+}
 const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
-lock.sbomSha256 = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'runtime', 'sbom.json'))).digest('hex');
-fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
-const signature = crypto.sign(null, fs.readFileSync(lockPath), privateKey).toString('base64');
+lock.sbomSha256 = crypto.createHash('sha256').update(canonical(path.join(ROOT, 'runtime', 'sbom.json'))).digest('hex');
+fs.writeFileSync(lockPath, canonical(lockPath));
+const signature = crypto.sign(null, canonical(lockPath), privateKey).toString('base64');
 fs.writeFileSync(path.join(ROOT, 'runtime', 'lock.sig.json'), JSON.stringify({
   algorithm: 'Ed25519',
   signature,

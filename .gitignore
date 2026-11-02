@@ -17,6 +17,7 @@ display/
 *.pem
 *.pfx
 *.p12
+!runtime/release-public-key.pem
 **/.dsh/
 **/.agents/
 **/episodes/

@@ -15,11 +15,14 @@ for (const component of lock.components) {
     throw new Error('component id/version/sha256/license required');
   }
 }
-const sbomHash = crypto.createHash('sha256').update(fs.readFileSync(path.join(ROOT, 'runtime', 'sbom.json'))).digest('hex');
+function canonical(file) {
+  return JSON.stringify(JSON.parse(fs.readFileSync(file, 'utf8')), null, 2) + '\n';
+}
+const sbomHash = crypto.createHash('sha256').update(canonical(path.join(ROOT, 'runtime', 'sbom.json'))).digest('hex');
 if (sbomHash !== lock.sbomSha256) throw new Error('SBOM hash mismatch');
 const sig = JSON.parse(fs.readFileSync(path.join(ROOT, 'runtime', 'lock.sig.json'), 'utf8'));
 const publicKey = fs.readFileSync(path.join(ROOT, 'runtime', 'release-public-key.pem'), 'utf8');
-if (!crypto.verify(null, fs.readFileSync(path.join(ROOT, 'runtime', 'lock.json')), publicKey, Buffer.from(sig.signature, 'base64'))) {
+if (!crypto.verify(null, canonical(path.join(ROOT, 'runtime', 'lock.json')), publicKey, Buffer.from(sig.signature, 'base64'))) {
   throw new Error('runtime lock signature invalid');
 }
 const revocations = JSON.parse(fs.readFileSync(path.join(ROOT, 'runtime', 'revocations.json'), 'utf8'));
