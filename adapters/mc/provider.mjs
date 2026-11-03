@@ -13,7 +13,17 @@ export function createRuntime({ env = process.env, mcClientFactory = null, clien
   let lastError = null;
   return {
     client,
-    async start() { state = 'ready'; lastError = null; },
+    async start() {
+      try {
+        await client.info();
+        state = 'ready';
+        lastError = null;
+      } catch (error) {
+        state = 'degraded';
+        lastError = error.message;
+        throw error;
+      }
+    },
     async stop() { state = 'stopped'; },
     status() { return { state, lastError, enabled: state !== 'stopped' }; },
     async obs() {

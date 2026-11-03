@@ -16,7 +16,7 @@ const error = (code, message) => Object.assign(new Error(message), { code });
 
 export function computeSettingsHash(configDir) {
   const hash = crypto.createHash('sha256');
-  for (const name of ['instance.json', 'llm.json', 'napcat.token', 'bilibili-cookies.txt']) {
+  for (const name of ['instance.json', 'llm.json', 'napcat.token', 'bilibili-cookies.txt', 'mcpfabric.token']) {
     const file = path.join(configDir, name);
     hash.update(name);
     hash.update(exists(file) ? fs.readFileSync(file) : Buffer.alloc(0));
@@ -84,7 +84,13 @@ export class InstanceSettings {
           roomId: Number(instance.connections?.bilibili?.roomId || 0),
           cookieSet: Boolean(readSecret(path.join(this.configDir, 'bilibili-cookies.txt'))),
         },
-        mc: { configurable: false },
+        mc: {
+          configurable: true,
+          topology: instance.connections?.mc?.topology || 'local-wsl',
+          serverAddress: instance.connections?.mc?.serverAddress || '127.0.0.1:25565',
+          rpcUrl: instance.connections?.mc?.rpcUrl || 'http://127.0.0.1:25600/rpc',
+          tokenSet: Boolean(readSecret(path.join(this.configDir, 'mcpfabric.token'))),
+        },
       },
       llm: llm ? {
         configured: true,
@@ -144,6 +150,22 @@ export class InstanceSettings {
     if (!response.ok || !data || data.code !== 0) throw error(400, 'Bilibili room verification failed');
   }
 
+  async _testMc(connection, token) {
+    if (!['local-wsl', 'windows-host', 'remote'].includes(connection.topology)) throw error(400, 'MC topology must be local-wsl, windows-host or remote');
+    if (!validHttpUrl(connection.rpcUrl)) throw error(400, 'MC rpcUrl must be HTTP(S)');
+    if (connection.topology === 'remote' && new URL(connection.rpcUrl).protocol !== 'https:') throw error(400, 'remote MC RPC must use HTTPS');
+    if (!/^[A-Za-z0-9._:-]+$/.test(connection.serverAddress || '')) throw error(400, 'MC serverAddress must be host:port');
+    if (!token) throw error(400, 'mcpfabric token required');
+    const response = await this.fetch(connection.rpcUrl, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'session.info', params: {} }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok || !data?.ok) throw error(400, 'MC RPC session verification failed');
+  }
+
   async save(body = {}) {
     this._available();
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw error(400, 'settings body must be an object');
@@ -157,14 +179,13 @@ export class InstanceSettings {
         ...current.connections,
         qq: { ...current.connections?.qq, ...(body.connections?.qq || {}) },
         bilibili: { ...current.connections?.bilibili, ...(body.connections?.bilibili || {}) },
-        mc: { ...current.connections?.mc },
+        mc: { ...current.connections?.mc, ...(body.connections?.mc || {}) },
       },
     };
     if (typeof next.agent !== 'boolean') throw error(400, 'agent must be boolean');
     for (const name of ['qq', 'bilibili', 'mc']) {
       if (typeof next.applications[name] !== 'boolean') throw error(400, `${name} enabled flag must be boolean`);
     }
-    if (next.applications.mc) throw error(409, 'MC connection settings are not configured');
     const currentLlm = this._llm();
     const llmBody = body.llm || null;
     const nextLlm = llmBody ? {
@@ -181,6 +202,7 @@ export class InstanceSettings {
     if (nextLlm && (!Number.isFinite(nextLlm.temperature) || nextLlm.temperature < 0 || nextLlm.temperature > 2)) throw error(400, 'invalid LLM temperature');
     const qqToken = String(body.connections?.qq?.token || readSecret(path.join(this.configDir, 'napcat.token'))).trim();
     const biliCookie = String(body.connections?.bilibili?.cookie || readSecret(path.join(this.configDir, 'bilibili-cookies.txt'))).trim();
+    const mcToken = String(body.connections?.mc?.token || readSecret(path.join(this.configDir, 'mcpfabric.token'))).trim();
 
     if (llmBody) await this._testLlm(nextLlm);
     if (next.applications.qq && (next.applications.qq !== current.applications?.qq || body.connections?.qq)) {
@@ -189,11 +211,15 @@ export class InstanceSettings {
     if (next.applications.bilibili && (next.applications.bilibili !== current.applications?.bilibili || body.connections?.bilibili)) {
       await this._testBilibili(Number(next.connections.bilibili.roomId));
     }
+    if (next.applications.mc && (next.applications.mc !== current.applications?.mc || body.connections?.mc)) {
+      await this._testMc(next.connections.mc, mcToken);
+    }
 
     const files = new Map();
     if (llmBody) files.set(path.join(this.configDir, 'llm.json'), JSON.stringify(nextLlm, null, 2));
     if (body.connections?.qq?.token) files.set(path.join(this.configDir, 'napcat.token'), qqToken);
     if (body.connections?.bilibili?.cookie) files.set(path.join(this.configDir, 'bilibili-cookies.txt'), biliCookie);
+    if (body.connections?.mc?.token) files.set(path.join(this.configDir, 'mcpfabric.token'), mcToken);
     files.set(path.join(this.configDir, 'instance.json'), JSON.stringify(next, null, 2));
     const backups = new Map([...files.keys()].map((file) => [file, exists(file) ? fs.readFileSync(file) : null]));
     try {

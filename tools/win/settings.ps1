@@ -12,7 +12,7 @@ $script:Settings = $null
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Habitat 设置中心'
-$form.Size = New-Object System.Drawing.Size(780, 700)
+$form.Size = New-Object System.Drawing.Size(780, 820)
 $form.StartPosition = 'CenterParent'
 $form.Font = New-Object System.Drawing.Font('Segoe UI', 10)
 
@@ -66,25 +66,37 @@ $biliRoomBox = New-Input 180 412
 $null = New-Label 'B站 cookie（留空不改）' 25 453
 $biliCookieBox = New-Input 180 450 540 $true
 
-$mcBox = New-Checkbox '启用 MC（需先完成世界连接配置）' 25 495
-$mcBox.Enabled = $false
+$mcBox = New-Checkbox '启用 MC（世界服务器与 mcpfabric RPC 分开配置）' 25 490
+$null = New-Label 'MC 拓扑' 25 530
+$topologyBox = New-Object System.Windows.Forms.ComboBox
+$topologyBox.Location = New-Object System.Drawing.Point(180, 527)
+$topologyBox.Size = New-Object System.Drawing.Size(540, 28)
+$topologyBox.DropDownStyle = 'DropDownList'
+$null = $topologyBox.Items.AddRange([string[]]@('local-wsl', 'windows-host', 'remote'))
+$form.Controls.Add($topologyBox)
+$null = New-Label '世界服务器 host:port' 25 570
+$mcAddressBox = New-Input 180 567
+$null = New-Label 'mcpfabric RPC URL' 25 610
+$mcRpcBox = New-Input 180 607
+$null = New-Label 'mcpfabric token（留空不改）' 25 650
+$mcTokenBox = New-Input 180 647 540 $true
 
 $saveButton = New-Object System.Windows.Forms.Button
 $saveButton.Text = '校验并保存设置'
-$saveButton.Location = New-Object System.Drawing.Point(25, 540)
+$saveButton.Location = New-Object System.Drawing.Point(25, 700)
 $saveButton.Size = New-Object System.Drawing.Size(160, 38)
 $form.Controls.Add($saveButton)
 $reapplyButton = New-Object System.Windows.Forms.Button
 $reapplyButton.Text = '重新应用已保存配置'
-$reapplyButton.Location = New-Object System.Drawing.Point(200, 540)
+$reapplyButton.Location = New-Object System.Drawing.Point(200, 700)
 $reapplyButton.Size = New-Object System.Drawing.Size(190, 38)
 $form.Controls.Add($reapplyButton)
 $refreshButton = New-Object System.Windows.Forms.Button
 $refreshButton.Text = '重新读取'
-$refreshButton.Location = New-Object System.Drawing.Point(405, 540)
+$refreshButton.Location = New-Object System.Drawing.Point(405, 700)
 $refreshButton.Size = New-Object System.Drawing.Size(120, 38)
 $form.Controls.Add($refreshButton)
-$statusLabel = New-Label '正在读取设置…' 25 595 700
+$statusLabel = New-Label '正在读取设置…' 25 755 700
 $statusLabel.Size = New-Object System.Drawing.Size(700, 55)
 
 function Invoke-SettingsApi([string]$Method, [string]$Path, $Body = $null) {
@@ -122,7 +134,10 @@ function Read-Settings {
     $qqHttpBox.Text = $script:Settings.connections.qq.httpUrl
     $biliBox.Checked = $script:Settings.applications.bilibili
     $biliRoomBox.Text = [string]$script:Settings.connections.bilibili.roomId
-    $mcBox.Checked = $false
+    $mcBox.Checked = $script:Settings.applications.mc
+    $topologyBox.SelectedItem = $script:Settings.connections.mc.topology
+    $mcAddressBox.Text = $script:Settings.connections.mc.serverAddress
+    $mcRpcBox.Text = $script:Settings.connections.mc.rpcUrl
     Update-ApplyStatus | Out-Null
   } catch {
     $statusLabel.Text = '读取设置失败：' + $_.Exception.Message
@@ -136,14 +151,16 @@ function Save-Settings {
   }
   $body = @{
     agent = $agentBox.Checked
-    applications = @{ qq = $qqBox.Checked; bilibili = $biliBox.Checked; mc = $false }
+    applications = @{ qq = $qqBox.Checked; bilibili = $biliBox.Checked; mc = $mcBox.Checked }
     connections = @{
       qq = @{ wsUrl = $qqWsBox.Text.Trim(); httpUrl = $qqHttpBox.Text.Trim() }
       bilibili = @{ roomId = $roomId }
+      mc = @{ topology = [string]$topologyBox.SelectedItem; serverAddress = $mcAddressBox.Text.Trim(); rpcUrl = $mcRpcBox.Text.Trim() }
     }
   }
   if ($qqTokenBox.Text) { $body.connections.qq.token = $qqTokenBox.Text }
   if ($biliCookieBox.Text) { $body.connections.bilibili.cookie = $biliCookieBox.Text }
+  if ($mcTokenBox.Text) { $body.connections.mc.token = $mcTokenBox.Text }
   if ($script:Settings.llm.configured -or $baseUrlBox.Text.Trim() -or $modelBox.Text.Trim() -or $apiKeyBox.Text) {
     $body.llm = @{ baseUrl = $baseUrlBox.Text.Trim(); model = $modelBox.Text.Trim() }
     if ($apiKeyBox.Text) { $body.llm.apiKey = $apiKeyBox.Text }
@@ -152,7 +169,7 @@ function Save-Settings {
   $form.Refresh()
   try {
     $null = Invoke-SettingsApi 'POST' '/settings' $body
-    $apiKeyBox.Clear(); $qqTokenBox.Clear(); $biliCookieBox.Clear()
+    $apiKeyBox.Clear(); $qqTokenBox.Clear(); $biliCookieBox.Clear(); $mcTokenBox.Clear(); $mcTokenBox.Clear()
     $statusLabel.Text = '已保存，等待 supervisor 应用…'
     Update-ApplyStatus | Out-Null
   } catch {
@@ -174,7 +191,7 @@ $timer.Add_Tick({ Update-ApplyStatus | Out-Null })
 $timer.Start()
 $form.Add_FormClosed({
   $timer.Stop()
-  $apiKeyBox.Clear(); $qqTokenBox.Clear(); $biliCookieBox.Clear()
+  $apiKeyBox.Clear(); $qqTokenBox.Clear(); $biliCookieBox.Clear(); $mcTokenBox.Clear()
   $script:OwnerToken = ''
 })
 Read-Settings

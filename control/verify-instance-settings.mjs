@@ -12,6 +12,7 @@ const fetchImpl = async (url, options = {}) => {
   if (url.includes('invalid')) return new Response('{}', { status: 503 });
   if (url.endsWith('/models')) return new Response(JSON.stringify({ data: [] }), { status: 200 });
   if (url.endsWith('/get_login_info')) return new Response(JSON.stringify({ retcode: 0, status: 'ok', data: {} }), { status: 200 });
+  if (url.endsWith('/rpc')) return new Response(JSON.stringify({ ok: true, result: {} }), { status: 200 });
   if (url.includes('api.live.bilibili.com')) return new Response(JSON.stringify({ code: 0, data: {} }), { status: 200 });
   throw new Error('unexpected test URL');
 };
@@ -40,10 +41,32 @@ try {
   assert.equal(publicSettings.connections.qq.tokenSet, true);
   assert.equal(publicSettings.connections.bilibili.cookieSet, true);
   const revision = publicSettings.apply.settingsRevision;
-  await assert.rejects(settings.save({ applications: { mc: true } }));
-  assert.equal(settings.get().apply.settingsRevision, revision, '失败的应用开关不得推进配置修订');
+  await assert.rejects(settings.save({
+    applications: { mc: true },
+    connections: { mc: { topology: 'remote', serverAddress: 'mc.example.com:25565', rpcUrl: 'http://mc.example.com/rpc', token: 'mc-secret' } },
+  }), /remote MC RPC must use HTTPS/);
+  assert.equal(settings.get().apply.settingsRevision, revision, '失败的 MC 配置不得推进配置修订');
+  const mcSaved = await settings.save({
+    applications: { mc: true },
+    connections: { mc: { topology: 'local-wsl', serverAddress: '127.0.0.1:25565', rpcUrl: 'http://127.0.0.1:25600/rpc', token: 'mc-secret' } },
+  });
+  assert.equal(mcSaved.saved, true);
+  assert.equal(mcSaved.connections.mc.topology, 'local-wsl');
+  assert.equal(mcSaved.connections.mc.tokenSet, true);
+  assert.equal(JSON.stringify(mcSaved).includes('mc-secret'), false);
+  const windowsSaved = await settings.save({
+    applications: { mc: true },
+    connections: { mc: { topology: 'windows-host', serverAddress: 'host.docker.internal:25565', rpcUrl: 'http://host.docker.internal:25600/rpc' } },
+  });
+  assert.equal(windowsSaved.connections.mc.topology, 'windows-host');
+  const remoteSaved = await settings.save({
+    applications: { mc: true },
+    connections: { mc: { topology: 'remote', serverAddress: 'mc.example.com:25565', rpcUrl: 'https://mc.example.com/rpc' } },
+  });
+  assert.equal(remoteSaved.connections.mc.topology, 'remote');
+  const mcRevision = remoteSaved.apply.settingsRevision;
   const reapplied = await settings.save({ reapply: true });
-  assert.equal(reapplied.apply.settingsRevision, revision + 1);
+  assert.equal(reapplied.apply.settingsRevision, mcRevision + 1);
   console.log('ok: 设置校验、原子保存、脱敏读取、失败不生效与重新应用');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

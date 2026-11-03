@@ -13,6 +13,11 @@ const server = http.createServer((req, res) => {
     res.end(JSON.stringify({ object: 'list', data: [] }));
     return;
   }
+  if (req.url === '/rpc') {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, result: {} }));
+    return;
+  }
   if (req.url === '/v1/chat/completions') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ id: 'settings-test', object: 'chat.completion', created: 0, model: 'settings-test', choices: [{ index: 0, message: { role: 'assistant', content: '[]' }, finish_reason: 'stop' }] }));
@@ -74,10 +79,23 @@ try {
 
   const reapplied = await request('POST', '/settings/reapply', {});
   assert.equal(reapplied.status, 200);
-  await waitFor((settings, current) => settings.apply.state === 'applied' && current.services?.agent?.pid && current.services.agent.pid !== thirdPid, 'explicit reapply');
+  const reappliedState = await waitFor((settings, current) => settings.apply.state === 'applied' && current.services?.agent?.pid && current.services.agent.pid !== thirdPid, 'explicit reapply');
+  const reapplyPid = reappliedState.current.services.agent.pid;
+
+  const mcEnabled = await request('POST', '/settings', {
+    applications: { mc: true },
+    connections: { mc: { topology: 'local-wsl', serverAddress: '127.0.0.1:25565', rpcUrl: 'http://127.0.0.1:18080/rpc', token: 'mc-settings-test-token' } },
+  });
+  assert.equal(mcEnabled.status, 200, JSON.stringify(mcEnabled.data));
+  const mcState = await waitFor((settings, current) => settings.apply.state === 'applied' && current.services?.agent?.pid && current.services.agent.pid !== reapplyPid, 'MC enable and RPC verification');
+  const mcPid = mcState.current.services.agent.pid;
+  const mcDisabled = await request('POST', '/settings', { applications: { mc: false } });
+  assert.equal(mcDisabled.status, 200);
+  await waitFor((settings, current) => settings.apply.state === 'applied' && current.services?.agent?.pid && current.services.agent.pid !== mcPid, 'MC disable restart');
 
   const publicSettings = (await request('GET', '/settings')).data;
   assert.equal(JSON.stringify(publicSettings).includes('settings-test-key'), false, 'secret returned by settings API');
+  assert.equal(JSON.stringify(publicSettings).includes('mc-settings-test-token'), false, 'MC token returned by settings API');
   assert.equal(publicSettings.llm.model, 'settings-model-b');
   assert.equal(publicSettings.llm.apiKeySet, true);
   const stop = await request('POST', '/settings', { agent: false });

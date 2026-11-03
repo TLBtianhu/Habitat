@@ -89,6 +89,7 @@ function environment(ports, config) {
     HABITAT_ONEBOT_WS_URL: config.connections?.qq?.wsUrl || '',
     HABITAT_ONEBOT_HTTP_URL: config.connections?.qq?.httpUrl || '',
     HABITAT_BILIBILI_ROOM_ID: String(config.connections?.bilibili?.roomId || 0),
+    HABITAT_MCPFABRIC_RPC: config.connections?.mc?.rpcUrl || 'http://127.0.0.1:25600/rpc',
     HABITAT_STAGE: `http://127.0.0.1:${ports.stage}`,
     HABITAT_VOICE: `http://127.0.0.1:${ports.voice}`,
     HABITAT_OWNER_TOKEN_FILE: path.join(CONFIG, 'owner.token'),

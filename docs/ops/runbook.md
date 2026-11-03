@@ -6,6 +6,13 @@
 
 普通用户只使用 `HabitatSetup.exe` 安装/升级/卸载和 `HabitatConsole.exe` 启动控制台；不需要输入 WSL 命令。安装使用独立 WSL 用户实例目录，保留 data/config，不覆盖开发目录，也不要求管理员。客户端自动读取 InstallRoot；首次启动默认禁用外部应用，只有配置实例自己的 `config/llm.json` 后才启动 AgentLoop。设置中心可随时修改 LLM、应用开关和连接配置，保存后由 supervisor 应用，不把“已保存”当作“已生效”。
 
+## MC 世界与 RPC 拓扑
+
+- `local-wsl`：连接 WSL 中已经运行的世界和 mcpfabric RPC；
+- `windows-host`：大肥鱼在 WSL，连接 Windows 上的主人联机房间，不自动修改防火墙；
+- `remote`：世界在其他设备，双方均为客户端，RPC 必须 HTTPS；
+- World Server 地址与 RPC 地址分开设置，启用前必须通过真实 `session.info`，开关本身不代表在线。
+
 Windows 薄启动器只负责 WSL keepalive 与核心服务：
 
 ```powershell
