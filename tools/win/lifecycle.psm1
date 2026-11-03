@@ -1,4 +1,4 @@
-﻿# Habitat Windows 生命周期：固定命令白名单，不执行用户输入的任意 WSL 命令。
+# Habitat Windows 生命周期：固定命令白名单，不执行用户输入的任意 WSL 命令。
 $script:HabitatDistro = 'Ubuntu'
 
 function Get-HabitatNodePath {
@@ -88,6 +88,7 @@ function Start-HabitatLifecycle {
   $keepalive = Start-HabitatWsl -Wsl $Wsl -ProcessStarter $ProcessStarter -Distro $Distro
   $node = Get-HabitatNodePath -Wsl $Wsl
   & $Wsl "$node /opt/habitat/app/tools/lifecycle.mjs boot" | Out-Null
+  & $Wsl 'bash /opt/habitat/app/tools/wsl-start-adapters.sh' | Out-Null
   & $Wsl 'systemctl start habitat-stage.service habitat-control.service habitat-desktop.service habitat-voice.service habitat-audio.service habitat-outlet-supervisor.service habitat-agent.service' | Out-Null
   & $Health | Out-Null
   & $Wsl "$node /opt/habitat/app/tools/lifecycle.mjs ready" | Out-Null

@@ -28,7 +28,7 @@ powershell -File tools/win/habitat.ps1 -Action resume
 ## 正常停机顺序
 
 1. **停止新决策**：`habitat-agent` 停止接收新 tick，最多等待当前 tick 5 秒，随后发布 AppSession 快照、暂停并保存当前 Episode、compact 分场所记忆；超时明确报错，不假装成功。
-2. **停止出口与适配器**：Outlet Supervisor 停止编码进程并等待真实退出；QQ/B站/MC 适配器由 adapter host 停止；B站与 QQ WebSocket 均正常 close 优先，1 秒后有界 terminate，避免停止后残留连接。
+2. **停止出口与适配器**：Outlet Supervisor 停止编码进程并等待真实退出；QQ/B站/MC 适配器由 adapter host 停止；B站与 QQ WebSocket 均正常 close 优先，1 秒后有界 terminate。已配置的 `napcat` 容器也执行有界 `docker stop`，启动端只拉起已存在的同名容器，不创建新实例，也不影响其他容器。
 3. **停止音频与桌面生产**：Voice、Audio Mixer、Desktop 停止新的合成和捕获，已有磁盘缓存保留。
 4. **停止控制面和舞台**：Control、Stage 以及已知旧 Habitat 单元最后退出。
 5. **保留 WSL 与其他工作**：Habitat 服务停止后，不执行全局 `wsl --shutdown`；只有使用专用发行版且主人明确选择时，才允许单独终止该发行版。
@@ -53,7 +53,7 @@ powershell -File tools/win/habitat.ps1 -Action resume
 
 ## 本次实测
 
-- Windows 客户端执行真实停止后，所有 Habitat 单元均为 inactive，WSL 仍保持运行，没有全局关机；
+- Windows 客户端执行真实停止后，所有 Habitat 单元均为 inactive，NapCat 容器也已停止，WSL 仍保持运行，没有全局关机；
 - 客户端再次启动后 `lifecycle.state=running`、`lastShutdownAbnormal=false`、无待恢复项，QQ 恢复 ready；
 - 默认音色、聊天水位、任务状态保留；HLS/RTMP 和捕获没有自动重启。
 
