@@ -32,6 +32,7 @@ powershell -File tools/win/habitat.ps1 -Action resume
 3. **停止音频与桌面生产**：Voice、Audio Mixer、Desktop 停止新的合成和捕获，已有磁盘缓存保留。
 4. **停止控制面和舞台**：Control、Stage 以及已知旧 Habitat 单元最后退出。
 5. **保留 WSL 与其他工作**：Habitat 服务停止后，不执行全局 `wsl --shutdown`；只有使用专用发行版且主人明确选择时，才允许单独终止该发行版。
+6. **安装版独立停止**：有 InstallRoot 时只停止该实例的 supervisor 与子进程，不调用开发现实例的 systemctl/wsl-stop，也不停止开发 NapCat；崩溃遗留的已验证子进程按实例 PID 记录清理。
 
 **任何服务停不干净时，报告失败并保留诊断，不强关整个 VM。** Outlet 子进程的超时升级只由 Supervisor 在自己的实例内执行，不能扩大成随意杀进程。
 

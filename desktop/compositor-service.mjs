@@ -8,8 +8,8 @@ import { renderSvg } from './renderer.mjs';
 import { Resvg } from '@resvg/resvg-js';
 
 const PORT = Number(process.env.HABITAT_DESKTOP_PORT || 9260);
-const AGENT_TOKEN = fs.readFileSync('/etc/habitat/agent.token', 'utf8').trim();
-const OWNER_TOKEN = fs.readFileSync('/etc/habitat/owner.token', 'utf8').trim();
+const AGENT_TOKEN = fs.readFileSync(process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/agent.token', 'utf8').trim();
+const OWNER_TOKEN = fs.readFileSync(process.env.HABITAT_OWNER_TOKEN_FILE || '/etc/habitat/owner.token', 'utf8').trim();
 const registry = new AppRegistry();
 const providers = new Map([
   ['mc', new FileSurfaceProvider({

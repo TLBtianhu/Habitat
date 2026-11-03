@@ -9,8 +9,8 @@ const PORT = Number(process.env.HABITAT_VOICE_PORT || 9270);
 const CONTROL = process.env.HABITAT_CONTROL_URL || 'http://127.0.0.1:9240';
 const CACHE = process.env.HABITAT_TTS_CACHE || '/var/lib/habitat/cache/tts';
 const UTTERANCE_LOG = process.env.HABITAT_UTTERANCE_LOG || '/var/lib/habitat/utterances.jsonl';
-const AGENT_TOKEN = fs.readFileSync('/etc/habitat/agent.token', 'utf8').trim();
-const OWNER_TOKEN = fs.readFileSync('/etc/habitat/owner.token', 'utf8').trim();
+const AGENT_TOKEN = fs.readFileSync(process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/agent.token', 'utf8').trim();
+const OWNER_TOKEN = fs.readFileSync(process.env.HABITAT_OWNER_TOKEN_FILE || '/etc/habitat/owner.token', 'utf8').trim();
 const library = new VoiceLibrary({
   directory: new URL('./profiles/', import.meta.url).pathname,
   defaultId: process.env.HABITAT_VOICE_PROFILE || 'generic/kokoro-zf-xiaoni',

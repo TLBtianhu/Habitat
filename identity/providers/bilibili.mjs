@@ -43,7 +43,8 @@ export async function poll(qrcodeKey) {
 
 export function writeConfig({ sessdata }) {
   const cfg = { provider: 'bilibili', sessdata, scopes: ['live.read', 'live.write', 'live.push'] };
-  fs.writeFileSync('/etc/habitat/bilibili.json', JSON.stringify(cfg, null, 2), { mode: 0o600 });
-  try { fs.chownSync('/etc/habitat/bilibili.json', 1000, 1000); } catch {}
-  return { written: '/etc/habitat/bilibili.json' };
+  const file = process.env.HABITAT_BILIBILI_CONFIG || '/etc/habitat/bilibili.json';
+  fs.writeFileSync(file, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+  try { fs.chownSync(file, 1000, 1000); } catch {}
+  return { written: file };
 }

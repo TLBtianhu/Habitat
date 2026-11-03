@@ -43,6 +43,7 @@ const registry = installer.registry([
 registry.openSessions(session);
 for (const id of ['mc', 'qq', 'bilibili']) {
   if (!registry.list().some((item) => item.id === id)) continue;
+  if (process.env[`HABITAT_${id.toUpperCase()}_ENABLED`] === '0') continue;
   try { await registry.start(id); }
   catch (error) { console.log('plugin runtime degraded', id, error.message); }
 }
@@ -71,16 +72,19 @@ const pump = new DurableEventPump({
 });
 await pump.start();
 
-const onebotStatusFile = '/var/lib/habitat/pump/onebot-status.json';
+const onebotStatusFile = process.env.HABITAT_ONEBOT_STATUS_FILE || '/var/lib/habitat/pump/onebot-status.json';
 function publishOnebotStatus() {
   fs.mkdirSync(path.dirname(onebotStatusFile), { recursive: true });
-  fs.writeFileSync(onebotStatusFile, JSON.stringify(qqRuntime?.status() || { state: 'disabled', enabled: false }), { mode: 0o600 });
+  const status = process.env.HABITAT_QQ_ENABLED === '0'
+    ? { state: 'disabled', enabled: false }
+    : (qqRuntime?.status() || { state: 'disabled', enabled: false });
+  fs.writeFileSync(onebotStatusFile, JSON.stringify(status), { mode: 0o600 });
 }
 publishOnebotStatus();
 const onebotStatusTimer = setInterval(publishOnebotStatus, 5000);
 
 const presence = new ResidencePresence();
-const presenceFile = '/var/lib/habitat/pump/presence.json';
+const presenceFile = process.env.HABITAT_PRESENCE_FILE || '/var/lib/habitat/pump/presence.json';
 let lastMcObservation = { available: false, error: 'not_probed' };
 function publishPresence() {
   const pumpStatus = pump.status();
@@ -95,7 +99,7 @@ function publishPresence() {
     const status = qqRuntime.status();
     presence.update('qq', {
       channel: 'qq',
-      enabled: status.enabled !== false && !registry.isSuspended('qq'),
+      enabled: status.enabled !== false && !registry.isSuspended('qq') && process.env.HABITAT_QQ_ENABLED !== '0',
       state: status.state === 'ready' ? 'online' : ['degraded', 'connecting', 'auth_required'].includes(status.state) ? 'degraded' : 'offline',
       lastEventAt: status.lastMessageAt,
       lastError: status.lastError,
@@ -106,7 +110,7 @@ function publishPresence() {
     const status = bilibiliRuntime.status();
     presence.update('bilibili', {
       channel: 'bilibili',
-      enabled: status.enabled !== false && !registry.isSuspended('bilibili'),
+      enabled: status.enabled !== false && !registry.isSuspended('bilibili') && process.env.HABITAT_BILIBILI_ENABLED !== '0',
       state: status.state === 'ready' ? 'online' : ['degraded', 'connecting'].includes(status.state) ? 'degraded' : 'offline',
       lastEventAt: status.lastMessageAt,
       lastError: status.lastError,
@@ -195,7 +199,7 @@ const broker = {
     return registry.call(verb, { ...args, idempotencyKey });
   },
 };
-const cfg = JSON.parse(fs.readFileSync('/etc/habitat/llm.json', 'utf8'));
+const cfg = JSON.parse(fs.readFileSync(process.env.HABITAT_LLM_CONFIG || '/etc/habitat/llm.json', 'utf8'));
 const provider = new OpenAIProvider({ baseUrl: cfg.baseUrl, model: cfg.model, apiKey: cfg.apiKey });
 const decider = createLlmDecider(provider, {
   allowedVerbs: ['app.open', 'app.focus', 'app.background', 'app.close', 'app.restart', ...registry.toolNames()],

@@ -19,7 +19,9 @@
 - 应用可安装到系统目录或用户安装目录；
 - 安装版才拥有注册表、文件关联和卸载入口；
 - 配置与用户数据放 '%APPDATA%/Habitat'，大模型/缓存放 '%LOCALAPPDATA%/Habitat/cache'；
-- 卸载默认保留配置、记忆、模型和用户数据，只有明确 purge 才清理。
+- 卸载默认保留配置、记忆、模型和用户数据，只有明确 purge 才清理；
+- 安装版由 WSL 当前用户的 supervisor 启停，使用独立 102xx 端口和 data/config，不借用开发现实例的 systemctl 服务；
+- 默认不连接外部应用；缺 LLM 配置时显示 configuration_required，不伪造人格在线。
 
 ### Windows 只保留两个 EXE
 

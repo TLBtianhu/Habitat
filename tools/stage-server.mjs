@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const ROOT = process.env.FB_STAGE_ROOT || 'C:/Habitat/stage';
 const HLS_ROOT = process.env.FB_HLS_ROOT || path.join(ROOT, 'hls');
-const PORT = 9230;
+const PORT = Number(process.env.HABITAT_STAGE_PORT || 9230);
 const LIVE_MAX_AGE_MS = Number(process.env.FB_LIVE_MAX_AGE_MS || 8000);
 const TYPES = {
   '.html': 'text/html; charset=utf-8',

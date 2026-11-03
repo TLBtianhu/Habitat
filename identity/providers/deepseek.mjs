@@ -22,7 +22,8 @@ export function writeConfig(fields) {
     maxTokens: 300,
     temperature: 0.3,
   };
-  fs.writeFileSync('/etc/habitat/llm.json', JSON.stringify(cfg, null, 2), { mode: 0o600 });
-  try { fs.chownSync('/etc/habitat/llm.json', 1000, 1000); } catch {}
-  return { written: '/etc/habitat/llm.json' };
+  const file = process.env.HABITAT_LLM_CONFIG || '/etc/habitat/llm.json';
+  fs.writeFileSync(file, JSON.stringify(cfg, null, 2), { mode: 0o600 });
+  try { fs.chownSync(file, 1000, 1000); } catch {}
+  return { written: file };
 }

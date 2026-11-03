@@ -4,7 +4,7 @@
 
 ## 启动顺序
 
-普通用户只使用 `HabitatSetup.exe` 安装/升级/卸载和 `HabitatConsole.exe` 启动控制台；不需要输入 WSL 命令。安装使用独立 WSL 用户实例目录，保留 data/config，不覆盖开发目录，也不要求管理员。
+普通用户只使用 `HabitatSetup.exe` 安装/升级/卸载和 `HabitatConsole.exe` 启动控制台；不需要输入 WSL 命令。安装使用独立 WSL 用户实例目录，保留 data/config，不覆盖开发目录，也不要求管理员。客户端自动读取 InstallRoot；首次启动默认禁用外部应用，只有配置实例自己的 `config/llm.json` 后才启动 AgentLoop。
 
 Windows 薄启动器只负责 WSL keepalive 与核心服务：
 

@@ -96,6 +96,8 @@ done
     if ($LASTEXITCODE -ne 0) { throw '运行时链接校验失败' }
     wsl -d Ubuntu -u $script:WslUser -- bash -lc "mkdir -p '$InstallRoot/runtime' && tar -xzf '$InstallRoot/data/runtime.tar.gz' -C '$InstallRoot/runtime' && HABITAT_RUNTIME_ARCHIVE='$InstallRoot/data/runtime.tar.gz' '$InstallRoot/runtime/node22/bin/node' '$InstallRoot/app/tools/fetch-runtime.mjs' '$InstallRoot/runtime'"
     if ($LASTEXITCODE -ne 0) { throw '运行时 lock/SBOM/组件验收失败' }
+    wsl -d Ubuntu -u $script:WslUser -- bash -lc "cd '$InstallRoot/app' && PATH='$InstallRoot/runtime/node22/bin':/usr/bin:/bin '$InstallRoot/runtime/node22/bin/npm' ci --omit=dev --ignore-scripts --no-audit --no-fund"
+    if ($LASTEXITCODE -ne 0) { throw 'WSL 平台依赖安装失败' }
   } else {
     Write-Output '未提供 RuntimeUrl：应用层已安装，运行时需另行按 manifest 校验安装'
   }

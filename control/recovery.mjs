@@ -96,7 +96,11 @@ export class RecoveryManager {
   recover() {
     const before = this._pending();
     const episode = this._stores().episodeStore.get(process.env.HABITAT_EPISODE_ID || 'live-current');
-    if (!episode) return this._write({ ...this._read(), lastRecovery: { at: Date.now(), changed: 0, reason: 'no_episode' } });
+    if (!episode) return this._write({
+      ...this._read(),
+      recoveryRequired: this._pending().total > 0,
+      lastRecovery: { at: Date.now(), changed: 0, reason: 'no_episode' },
+    });
     const tracker = new ActionTracker({
       episode,
       episodeStore: this.episodeStore,

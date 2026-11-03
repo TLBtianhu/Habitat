@@ -9,8 +9,9 @@ export function createRuntime({
   onebotClientFactory = null,
   onebotSupervisorFactory = null,
 } = {}) {
+  const tokenFile = env.HABITAT_NAPCAT_TOKEN_FILE || '/etc/habitat/napcat.token';
   const token = String(env.NAPCAT_TOKEN || '').trim() || (
-    fs.existsSync('/etc/habitat/napcat.token') ? fs.readFileSync('/etc/habitat/napcat.token', 'utf8').trim() : ''
+    fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, 'utf8').trim() : ''
   );
   const onebotClient = onebotClientFactory
     ? onebotClientFactory()

@@ -4,9 +4,11 @@ import { BiliConnectionSupervisor } from '../../clients/bilibili-supervisor.mjs'
 
 function loadCookie(env) {
   if (env.HABITAT_BILIBILI_COOKIE) return env.HABITAT_BILIBILI_COOKIE;
-  if (fs.existsSync('/etc/habitat/bilibili-cookies.txt')) return fs.readFileSync('/etc/habitat/bilibili-cookies.txt', 'utf8').trim();
-  if (fs.existsSync('/etc/habitat/bilibili.json')) {
-    return `SESSDATA=${JSON.parse(fs.readFileSync('/etc/habitat/bilibili.json', 'utf8')).sessdata}`;
+  const cookieFile = env.HABITAT_BILIBILI_COOKIE_FILE || '/etc/habitat/bilibili-cookies.txt';
+  const configFile = env.HABITAT_BILIBILI_CONFIG || '/etc/habitat/bilibili.json';
+  if (fs.existsSync(cookieFile)) return fs.readFileSync(cookieFile, 'utf8').trim();
+  if (fs.existsSync(configFile)) {
+    return `SESSDATA=${JSON.parse(fs.readFileSync(configFile, 'utf8')).sessdata}`;
   }
   return '';
 }

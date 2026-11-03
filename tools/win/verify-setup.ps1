@@ -13,6 +13,7 @@ if ($defaultWslUser -eq 'root') {
   $linuxHome = (wsl -d Ubuntu -- bash -lc 'printf %s "$HOME"').Trim()
 }
 $installRoot = "$linuxHome/.local/share/habitat-test"
+$runtimeArchive = if ($env:HABITAT_TEST_RUNTIME_ARCHIVE) { $env:HABITAT_TEST_RUNTIME_ARCHIVE } else { '/tmp/habitat-runtime-core-0.1.1.tar.gz' }
 $env:HABITAT_INSTALL_ROOT = $installRoot
 $clientDir = Join-Path $root '.tmp\setup-client'
 $startMenuDir = Join-Path $root '.tmp\setup-start-menu'
@@ -34,7 +35,7 @@ function Cleanup {
   }
 }
 Cleanup -KeepEnvironment
-wsl -d Ubuntu -- bash -lc "mkdir -p '$installRoot/data' && if [ -f /tmp/habitat-runtime-core-0.1.1.tar.gz ]; then cp /tmp/habitat-runtime-core-0.1.1.tar.gz '$installRoot/data/runtime.tar.gz'; fi"
+wsl -d Ubuntu -- bash -lc "mkdir -p '$installRoot/data' && if [ -f '$runtimeArchive' ]; then cp '$runtimeArchive' '$installRoot/data/runtime.tar.gz'; fi"
 try {
   & $setupExe upgrade $package $installRoot
   if ($LASTEXITCODE -ne 0) { throw 'Setup EXE 安装失败' }

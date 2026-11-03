@@ -52,6 +52,20 @@ if ($script:recoveryCalls.Count -ne 1 -or $script:recoveryCalls[0].Path -ne '/re
 }
 $status = Get-HabitatLifecycleStatus -Http $http
 if ($status.state -ne 'running' -or -not $status.recoveryRequired) { throw '异常状态读取失败' }
+
+$script:installedCommands = @()
+$installedWsl = {
+  param($Command)
+  $script:installedCommands += $Command
+  if ($Command -match 'instance-supervisor\.mjs status') { return '{"state":"running","supervisorRunning":true}' }
+  return 'ok'
+}
+$installedHttp = { param($Method, $Path, $Token) return @{ state = 'running'; recoveryRequired = $false } }
+Start-HabitatLifecycle -Wsl $installedWsl -Http $installedHttp -Health { $true } -ProcessStarter { $null } -InstallRoot '/home/test/.local/share/habitat-test' | Out-Null
+if ($script:installedCommands -match 'lifecycle\.mjs boot') { throw '运行中的安装实例不得重复写 boot' }
+if ($script:installedCommands -match 'instance-supervisor\.mjs start') { throw '运行中的安装实例不得重复拉起 supervisor' }
+Stop-HabitatLifecycle -Wsl $installedWsl -InstallRoot '/home/test/.local/share/habitat-test' | Out-Null
+if ($script:installedCommands -match 'systemctl|wsl-stop\.sh') { throw '安装实例停止不得控制系统实例' }
 $parseErrors = $null
 $null = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'client.ps1'), [ref]$null, [ref]$parseErrors)
 if ($parseErrors.Count) { throw "client.ps1 语法错误: $($parseErrors[0].Message)" }

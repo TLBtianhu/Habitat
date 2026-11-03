@@ -110,7 +110,7 @@ try {
   if ($LASTEXITCODE -ne 0) { throw '应用目录切换失败' }
   $swapped = $true
   if ($SimulateFailure) { throw '模拟健康检查失败' }
-  wsl -d Ubuntu -u $script:WslUser -- bash -lc "mkdir -p '$InstallRoot/data' '$InstallRoot/config' && chmod -R u+rwX,go-rwx '$InstallRoot/data' '$InstallRoot/config'"
+  wsl -d Ubuntu -u $script:WslUser -- bash -lc "mkdir -p '$InstallRoot/data' '$InstallRoot/config' && if [ -f '$staging/data/runtime.tar.gz' ]; then cp '$staging/data/runtime.tar.gz' '$InstallRoot/data/runtime.tar.gz'; fi && chmod -R u+rwX,go-rwx '$InstallRoot/data' '$InstallRoot/config'"
   if ($LASTEXITCODE -ne 0) { throw '无法创建正式数据/配置目录' }
   Register-Client
 } catch {

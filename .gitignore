@@ -30,6 +30,9 @@ display/
 **/after-action.jsonl
 **/skill-library.json
 **/lifecycle.json
+**/supervisor.pid.json
+**/instance-status.json
+**/instance.json
 **/world-server/
 **/hls/
 !plugins/hls/**

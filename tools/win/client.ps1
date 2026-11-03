@@ -1,7 +1,8 @@
 ﻿# Habitat Windows 客户端：一个窗口完成 WSL 检测、启停与异常恢复。
 [CmdletBinding()]
-param([string]$Distro = 'Ubuntu')
+param([string]$Distro = 'Ubuntu', [string]$InstallRoot = '')
 $ErrorActionPreference = 'Stop'
+$controlBase = if ($InstallRoot) { 'http://127.0.0.1:10240' } else { 'http://127.0.0.1:9240' }
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Import-Module (Join-Path $PSScriptRoot 'lifecycle.psm1') -Force
@@ -27,7 +28,7 @@ $statusLabel.Location = New-Object System.Drawing.Point(28, 75)
 $form.Controls.Add($statusLabel)
 
 $environmentLabel = New-Object System.Windows.Forms.Label
-$environmentLabel.Text = "运行环境：WSL / $Distro（由 Windows 客户端管理）"
+$environmentLabel.Text = if ($InstallRoot) { "运行环境：WSL / $Distro · 独立安装实例" } else { "运行环境：WSL / $Distro（由 Windows 客户端管理）" }
 $environmentLabel.AutoSize = $true
 $environmentLabel.Location = New-Object System.Drawing.Point(30, 170)
 $form.Controls.Add($environmentLabel)
@@ -90,12 +91,12 @@ function Set-Busy([bool]$Busy, [string]$Text) {
 function Refresh-Status {
   if ($script:Busy) { return }
   try {
-    $status = Get-HabitatLifecycleStatus
+    $status = Get-HabitatLifecycleStatus -InstallRoot $InstallRoot
     $recovery = if ($status.recoveryRequired) { '需要异常恢复' } else { '无待恢复项' }
     $text = "状态：$($status.state)`r`n启动次数：$($status.bootId) · $recovery"
     if ($status.lastShutdownAbnormal) { $text += "`r`n上次为异常中断" }
     try {
-      $presence = Invoke-RestMethod -Uri 'http://127.0.0.1:9240/presence' -TimeoutSec 3
+      $presence = Invoke-RestMethod -Uri "$controlBase/presence" -TimeoutSec 3
       $text += "`r`n场所：$($presence.aggregate)"
     } catch { $text += "`r`n场所：unknown" }
     $statusLabel.Text = $text
@@ -109,7 +110,7 @@ function Refresh-Status {
 $startButton.Add_Click({
   Set-Busy $true '正在检测并启动 WSL / Habitat…'
   try {
-    $result = Start-HabitatLifecycle -Distro $Distro
+    $result = Start-HabitatLifecycle -Distro $Distro -InstallRoot $InstallRoot
     $script:KeepaliveProcess = $result.keepaliveProcess
     Set-Busy $false 'Habitat 已启动'
     Refresh-Status
@@ -121,7 +122,7 @@ $startButton.Add_Click({
 $stopButton.Add_Click({
   Set-Busy $true '正在停止 Habitat（不会关闭整个 WSL）…'
   try {
-    Stop-HabitatLifecycle -Distro $Distro | Out-Null
+    Stop-HabitatLifecycle -Distro $Distro -InstallRoot $InstallRoot | Out-Null
     if ($script:KeepaliveProcess -and -not $script:KeepaliveProcess.HasExited) {
       Stop-Process -Id $script:KeepaliveProcess.Id -ErrorAction SilentlyContinue
     }
@@ -142,7 +143,7 @@ $recoverButton.Add_Click({
   }
   Set-Busy $true '正在只读核对异常恢复证据，不会重放动作…'
   try {
-    $result = Invoke-HabitatRecovery -Token $tokenBox.Text
+    $result = Invoke-HabitatRecovery -Token $tokenBox.Text -InstallRoot $InstallRoot
     $tokenBox.Clear()
     Set-Busy $false "恢复核对完成：pending $($result.pendingWrites.PSObject.Properties.Count) 类状态"
     Refresh-Status

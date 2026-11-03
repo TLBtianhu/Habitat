@@ -29,6 +29,12 @@ try {
   assert.equal(episodeStore.get('live-current').pendingWrites[0].status, 'confirmed');
   assert.equal(manager.status().recoveryRequired, false);
   assert.equal(skillLibrary.list().length, 1);
+  const empty = new RecoveryManager({ file: `${root}/empty-lifecycle.json`, episodeStore: new EpisodeStore({ root: `${root}/empty-episodes` }), afterAction, skillLibrary });
+  empty.boot();
+  empty.stopping();
+  assert.equal(empty.boot().recoveryRequired, true);
+  await empty.recover();
+  assert.equal(empty.status().recoveryRequired, false, '无 Episode 的基础实例也必须能完成恢复核对');
   console.log('ok: 正常/异常停止识别、只读恢复、pending 清理与成功技能门槛');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });

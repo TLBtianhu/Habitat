@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 
 export class VoiceClient {
-  constructor({ baseUrl = 'http://127.0.0.1:9270', tokenPath = process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/agent.token' } = {}) {
+  constructor({ baseUrl = process.env.HABITAT_VOICE_URL || 'http://127.0.0.1:9270', tokenPath = process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/agent.token' } = {}) {
     this.baseUrl = baseUrl.replace(/\/$/, '');
     this.token = fs.readFileSync(tokenPath, 'utf8').trim();
   }

@@ -12,6 +12,8 @@ internal static class HabitatConsoleProgram
             var exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
             var clientDir = Environment.GetEnvironmentVariable("HABITAT_CLIENT_DIR") as string;
             if (string.IsNullOrEmpty(clientDir)) clientDir = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Habitat", "ClientDir", null) as string;
+            var installRoot = Environment.GetEnvironmentVariable("HABITAT_INSTALL_ROOT") as string;
+            if (string.IsNullOrEmpty(installRoot)) installRoot = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Habitat", "InstallRoot", "") as string ?? "";
             var script = string.IsNullOrEmpty(clientDir)
                 ? Path.Combine(exeDir, "client.ps1")
                 : Path.Combine(clientDir, "tools", "win", "client.ps1");
@@ -23,7 +25,7 @@ internal static class HabitatConsoleProgram
             var psi = new ProcessStartInfo
             {
                 FileName = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"),
-                Arguments = string.Format("-NoProfile -ExecutionPolicy Bypass -File \"{0}\"", script),
+                Arguments = string.Format("-NoProfile -ExecutionPolicy Bypass -File \"{0}\" -InstallRoot \"{1}\"", script, installRoot),
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden,

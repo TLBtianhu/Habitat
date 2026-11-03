@@ -4,9 +4,9 @@ import path from 'node:path';
 
 export class SystemChatClient {
   constructor({
-    baseUrl = 'http://127.0.0.1:9240',
+    baseUrl = process.env.HABITAT_CONTROL_URL || 'http://127.0.0.1:9240',
     actor = 'dafeiyu',
-    tokenPath = '/etc/habitat/agent.token',
+    tokenPath = process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/agent.token',
     watermarkPath = process.env.HABITAT_SYSTEM_CHAT_WATERMARK || '/var/lib/habitat/agent-system-chat.json',
   } = {}) {
     this.baseUrl = baseUrl.replace(/\/$/, '');

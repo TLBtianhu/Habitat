@@ -21,7 +21,7 @@ const OWNER_TOKEN_PATH = process.env.HABITAT_OWNER_TOKEN_FILE || '/etc/habitat/o
 function ownerToken() {
   try { return fs.readFileSync(OWNER_TOKEN_PATH, 'utf8').trim(); } catch {
     const t = crypto.randomBytes(16).toString('hex');
-    fs.mkdirSync('/etc/habitat', { recursive: true });
+    fs.mkdirSync(path.dirname(OWNER_TOKEN_PATH), { recursive: true });
     fs.writeFileSync(OWNER_TOKEN_PATH, t, { mode: 0o600 });
     try { fs.chownSync(OWNER_TOKEN_PATH, 1000, 1000); } catch {}
     return t;
@@ -32,6 +32,7 @@ const AGENT_TOKEN_PATH = process.env.HABITAT_AGENT_TOKEN_FILE || '/etc/habitat/a
 function agentToken() {
   try { return fs.readFileSync(AGENT_TOKEN_PATH, 'utf8').trim(); } catch {
     const t = crypto.randomBytes(16).toString('hex');
+    fs.mkdirSync(path.dirname(AGENT_TOKEN_PATH), { recursive: true });
     fs.writeFileSync(AGENT_TOKEN_PATH, t, { mode: 0o600 });
     try { fs.chownSync(AGENT_TOKEN_PATH, 1000, 1000); } catch {}
     return t;
@@ -39,6 +40,9 @@ function agentToken() {
 }
 const AGENT_TOKEN = agentToken();
 const CHAT_LOG = process.env.HABITAT_CHAT_LOG || '/var/lib/habitat/system-chat.jsonl';
+const PRESENCE_FILE = process.env.HABITAT_PRESENCE_FILE || '/var/lib/habitat/pump/presence.json';
+const ONEBOT_STATUS_FILE = process.env.HABITAT_ONEBOT_STATUS_FILE || '/var/lib/habitat/pump/onebot-status.json';
+const SYSTEM_CHAT_PUMP = process.env.HABITAT_SYSTEM_CHAT_PUMP || '/var/lib/habitat/pump/system-chat.json';
 function loadChat() {
   try {
     return fs.readFileSync(CHAT_LOG, 'utf8').split(/\r?\n/).filter(Boolean).flatMap((line) => {
@@ -77,8 +81,9 @@ const state = {
 let nextId = persistedTasks.reduce((max, t) => Math.max(max, t.id), 0) + 1;
 let nextChatId = persistedChat.reduce((max, m) => Math.max(max, m.id), 0) + 1;
 const policy = loadChannelPolicy(process.env.HABITAT_RESIDENCE_POLICY || '/etc/habitat/residence-policy.json');
+const onebotTokenFile = process.env.HABITAT_NAPCAT_TOKEN_FILE || '/etc/habitat/napcat.token';
 const onebotToken = String(process.env.NAPCAT_TOKEN || '').trim() || (
-  fs.existsSync('/etc/habitat/napcat.token') ? fs.readFileSync('/etc/habitat/napcat.token', 'utf8').trim() : ''
+  fs.existsSync(onebotTokenFile) ? fs.readFileSync(onebotTokenFile, 'utf8').trim() : ''
 );
 const onebotClient = new OneBotClient({ httpUrl: process.env.HABITAT_ONEBOT_HTTP_URL || 'http://127.0.0.1:3003', accessToken: onebotToken });
 const crossChannel = new CrossChannelTasks({
@@ -219,21 +224,21 @@ http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && url.pathname === '/presence') {
     try {
-      return json(res, 200, JSON.parse(fs.readFileSync('/var/lib/habitat/pump/presence.json', 'utf8')));
+      return json(res, 200, JSON.parse(fs.readFileSync(PRESENCE_FILE, 'utf8')));
     } catch {
       return json(res, 200, { aggregate: 'unknown', residences: [] });
     }
   }
   if (req.method === 'GET' && url.pathname === '/qq/status') {
     try {
-      return json(res, 200, JSON.parse(fs.readFileSync('/var/lib/habitat/pump/onebot-status.json', 'utf8')));
+      return json(res, 200, JSON.parse(fs.readFileSync(ONEBOT_STATUS_FILE, 'utf8')));
     } catch {
       return json(res, 200, { state: 'disabled' });
     }
   }
   if (req.method === 'GET' && url.pathname === '/pump/status') {
     try {
-      const p = JSON.parse(fs.readFileSync('/var/lib/habitat/pump/system-chat.json', 'utf8'));
+      const p = JSON.parse(fs.readFileSync(SYSTEM_CHAT_PUMP, 'utf8'));
       return json(res, 200, {
         source: p.source,
         watermark: p.watermark,

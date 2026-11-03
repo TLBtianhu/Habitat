@@ -11,7 +11,7 @@ function failure(code, message) {
 }
 
 export class VoiceLibrary {
-  constructor({ directory, defaultId = 'generic/kokoro-zf-xiaoni', policyPath = '/etc/habitat/voice.json' }) {
+  constructor({ directory, defaultId = 'generic/kokoro-zf-xiaoni', policyPath = process.env.HABITAT_VOICE_POLICY || '/etc/habitat/voice.json' }) {
     this.defaultId = defaultId;
     this.policyPath = policyPath;
     this.profiles = new Map();
