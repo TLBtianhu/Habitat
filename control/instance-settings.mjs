@@ -89,6 +89,7 @@ export class InstanceSettings {
           topology: instance.connections?.mc?.topology || 'local-wsl',
           serverAddress: instance.connections?.mc?.serverAddress || '127.0.0.1:25565',
           rpcUrl: instance.connections?.mc?.rpcUrl || 'http://127.0.0.1:25600/rpc',
+          autoStart: instance.connections?.mc?.autoStart === true,
           tokenSet: Boolean(readSecret(path.join(this.configDir, 'mcpfabric.token'))),
         },
       },
@@ -155,6 +156,8 @@ export class InstanceSettings {
     if (!validHttpUrl(connection.rpcUrl)) throw error(400, 'MC rpcUrl must be HTTP(S)');
     if (connection.topology === 'remote' && new URL(connection.rpcUrl).protocol !== 'https:') throw error(400, 'remote MC RPC must use HTTPS');
     if (!/^[A-Za-z0-9._:-]+$/.test(connection.serverAddress || '')) throw error(400, 'MC serverAddress must be host:port');
+    if (connection.autoStart === true && connection.topology !== 'local-wsl') throw error(400, 'MC autoStart is only supported for local-wsl');
+    if (connection.autoStart === true) return;
     if (!token) throw error(400, 'mcpfabric token required');
     const response = await this.fetch(connection.rpcUrl, {
       method: 'POST',

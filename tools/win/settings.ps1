@@ -12,7 +12,7 @@ $script:Settings = $null
 
 $form = New-Object System.Windows.Forms.Form
 $form.Text = 'Habitat 设置中心'
-$form.Size = New-Object System.Drawing.Size(780, 820)
+$form.Size = New-Object System.Drawing.Size(780, 860)
 $form.StartPosition = 'CenterParent'
 $form.Font = New-Object System.Drawing.Font('Segoe UI', 10)
 
@@ -80,23 +80,24 @@ $null = New-Label 'mcpfabric RPC URL' 25 610
 $mcRpcBox = New-Input 180 607
 $null = New-Label 'mcpfabric token（留空不改）' 25 650
 $mcTokenBox = New-Input 180 647 540 $true
+$autoStartBox = New-Checkbox '创建/管理本地世界（仅 local-wsl）' 25 690
 
 $saveButton = New-Object System.Windows.Forms.Button
 $saveButton.Text = '校验并保存设置'
-$saveButton.Location = New-Object System.Drawing.Point(25, 700)
+$saveButton.Location = New-Object System.Drawing.Point(25, 740)
 $saveButton.Size = New-Object System.Drawing.Size(160, 38)
 $form.Controls.Add($saveButton)
 $reapplyButton = New-Object System.Windows.Forms.Button
 $reapplyButton.Text = '重新应用已保存配置'
-$reapplyButton.Location = New-Object System.Drawing.Point(200, 700)
+$reapplyButton.Location = New-Object System.Drawing.Point(200, 740)
 $reapplyButton.Size = New-Object System.Drawing.Size(190, 38)
 $form.Controls.Add($reapplyButton)
 $refreshButton = New-Object System.Windows.Forms.Button
 $refreshButton.Text = '重新读取'
-$refreshButton.Location = New-Object System.Drawing.Point(405, 700)
+$refreshButton.Location = New-Object System.Drawing.Point(405, 740)
 $refreshButton.Size = New-Object System.Drawing.Size(120, 38)
 $form.Controls.Add($refreshButton)
-$statusLabel = New-Label '正在读取设置…' 25 755 700
+$statusLabel = New-Label '正在读取设置…' 25 795 700
 $statusLabel.Size = New-Object System.Drawing.Size(700, 55)
 
 function Invoke-SettingsApi([string]$Method, [string]$Path, $Body = $null) {
@@ -138,6 +139,7 @@ function Read-Settings {
     $topologyBox.SelectedItem = $script:Settings.connections.mc.topology
     $mcAddressBox.Text = $script:Settings.connections.mc.serverAddress
     $mcRpcBox.Text = $script:Settings.connections.mc.rpcUrl
+    $autoStartBox.Checked = $script:Settings.connections.mc.autoStart
     Update-ApplyStatus | Out-Null
   } catch {
     $statusLabel.Text = '读取设置失败：' + $_.Exception.Message
@@ -155,7 +157,7 @@ function Save-Settings {
     connections = @{
       qq = @{ wsUrl = $qqWsBox.Text.Trim(); httpUrl = $qqHttpBox.Text.Trim() }
       bilibili = @{ roomId = $roomId }
-      mc = @{ topology = [string]$topologyBox.SelectedItem; serverAddress = $mcAddressBox.Text.Trim(); rpcUrl = $mcRpcBox.Text.Trim() }
+      mc = @{ topology = [string]$topologyBox.SelectedItem; serverAddress = $mcAddressBox.Text.Trim(); rpcUrl = $mcRpcBox.Text.Trim(); autoStart = $autoStartBox.Checked }
     }
   }
   if ($qqTokenBox.Text) { $body.connections.qq.token = $qqTokenBox.Text }

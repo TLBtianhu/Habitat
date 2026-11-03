@@ -41,15 +41,9 @@ const registry = installer.registry([
   providerContext: { systemChat, voice, policy, getResidenceContext: () => currentResidence },
 });
 registry.openSessions(session);
-for (const id of ['mc', 'qq', 'bilibili']) {
-  if (!registry.list().some((item) => item.id === id)) continue;
-  if (process.env[`HABITAT_${id.toUpperCase()}_ENABLED`] === '0') continue;
-  try { await registry.start(id); }
-  catch (error) { console.log('plugin runtime degraded', id, error.message); }
-}
-const mcRuntime = registry.runtime('mc');
-const qqRuntime = registry.runtime('qq');
-const bilibiliRuntime = registry.runtime('bilibili');
+let mcRuntime = null;
+let qqRuntime = null;
+let bilibiliRuntime = null;
 const pluginSupervisor = new InstalledPluginSupervisor({
   installer,
   registry,
@@ -115,6 +109,16 @@ function publishPresence() {
       lastEventAt: status.lastMessageAt,
       lastError: status.lastError,
       connectionId: status.connectionId,
+    });
+  }
+  const launcherRuntime = registry.runtime('mc-launcher');
+  if (launcherRuntime) {
+    const status = launcherRuntime.status();
+    presence.update('mc-launcher.local', {
+      channel: 'mc-launcher',
+      enabled: process.env.HABITAT_MC_LAUNCHER_AUTO_START === '1' && !registry.isSuspended('mc-launcher'),
+      state: status.state === 'ready' ? 'online' : (status.state === 'provisioning' ? 'degraded' : 'offline'),
+      lastError: status.lastError || null,
     });
   }
   presence.update('mc.world.current', {
@@ -216,6 +220,22 @@ const currentEpisode = episodeStore.get(episodeId) || episodeStore.create({
 if (currentEpisode.status === 'paused') currentEpisode.resume();
 if (bilibiliRuntime?.roomId) currentEpisode.addParticipant(`bilibili.room.${bilibiliRuntime.roomId}`);
 episodeStore.save(currentEpisode);
+registry.providerContext.episode = currentEpisode;
+registry.providerContext.episodeStore = episodeStore;
+for (const id of ['mc-launcher', 'mc', 'qq', 'bilibili']) {
+  if (!registry.list().some((item) => item.id === id)) continue;
+  if (id === 'mc-launcher' && process.env.HABITAT_MC_LAUNCHER_AUTO_START !== '1') continue;
+  if (process.env[`HABITAT_${id.toUpperCase()}_ENABLED`] === '0') continue;
+  try { await registry.start(id); }
+  catch (error) { console.log('plugin runtime degraded', id, error.message); }
+}
+mcRuntime = registry.runtime('mc');
+qqRuntime = registry.runtime('qq');
+bilibiliRuntime = registry.runtime('bilibili');
+if (bilibiliRuntime?.roomId) {
+  currentEpisode.addParticipant(`bilibili.room.${bilibiliRuntime.roomId}`);
+  episodeStore.save(currentEpisode);
+}
 const afterAction = new AfterActionStore({ file: process.env.HABITAT_AFTER_ACTION_FILE || '/var/lib/habitat/after-action.jsonl' });
 const skillLibrary = new SkillLibrary({ file: process.env.HABITAT_SKILL_LIBRARY || '/var/lib/habitat/skill-library.json' });
 const actionTracker = new ActionTracker({ episode: currentEpisode, episodeStore, afterAction, skillLibrary });

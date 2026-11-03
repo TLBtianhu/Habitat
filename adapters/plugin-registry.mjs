@@ -176,7 +176,7 @@ export class PluginRegistry {
   }
 
   async stopAll() {
-    const ids = new Set([...this.active, ...this.runtimes.keys()]);
+    const ids = new Set([...this.active, ...this.runtimes.keys()].reverse());
     const results = [];
     for (const id of ids) {
       if (!this.manifests.has(id)) continue;

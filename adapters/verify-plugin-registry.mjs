@@ -38,7 +38,7 @@ const apps = session.obs();
 for (const id of ['desktop', 'voice.library', 'mc', 'qq', 'bilibili', 'hls']) assert.ok(apps[id], `missing ${id}`);
 assert.equal(apps.mc.state, 'focused');
 assert.equal(apps['system.chat'], undefined, 'system.chat 不应伪装成普通 AppSession');
-assert.deepEqual(registry.toolNames().sort(), ['mc.obs', 'mc.look', 'mc.say', 'mc.stop', 'qq.reply', 'system.say', 'voice.speak'].sort());
+assert.deepEqual(registry.toolNames().sort(), ['mc-launcher.backup', 'mc-launcher.provision', 'mc-launcher.status', 'mc-launcher.stop', 'mc.obs', 'mc.look', 'mc.say', 'mc.stop', 'qq.reply', 'system.say', 'voice.speak'].sort());
 assert.deepEqual(registry.listTools().map((t) => t.name), registry.toolNames(), 'MCP schema 与 Registry 必须一致');
 
 assert.equal((await registry.call('system.say', { text: 'hello' })).text, 'hello');

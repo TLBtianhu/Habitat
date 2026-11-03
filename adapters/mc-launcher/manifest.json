@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "mc-launcher",
+  "name": "mc-launcher",
+  "displayName": "AI 世界启动器",
+  "kind": "mc-launcher",
+  "version": "0.1.0",
+  "lifecycle": "client",
+  "session": { "kind": "mc-launcher", "view": { "kind": "launcher" } },
+  "provider": "provider.mjs",
+  "entry": "server.mjs",
+  "capabilities": ["mc-launcher.provision", "mc-launcher.lifecycle", "mc-launcher.backup"],
+  "authFlows": ["offline"],
+  "scopes": ["mc-launcher.status", "mc-launcher.provision", "mc-launcher.lifecycle", "mc-launcher.backup"],
+  "tools": [
+    {
+      "name": "mc-launcher.status",
+      "description": "读取世界与 AI 客户端的真实进程和 RPC 状态",
+      "handler": "status",
+      "scope": "mc-launcher.status",
+      "concurrency": "parallel",
+      "idempotency": "none",
+      "timeoutMs": 5000,
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "mc-launcher.provision",
+      "description": "准备并启动本地世界与 AI 客户端，使用固定版本和哈希",
+      "handler": "provision",
+      "scope": "mc-launcher.provision",
+      "concurrency": "serial",
+      "idempotency": "per-intent",
+      "timeoutMs": 120000,
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "mc-launcher.stop",
+      "description": "停止该启动器拥有的 AI 客户端和世界进程",
+      "handler": "stop",
+      "scope": "mc-launcher.lifecycle",
+      "concurrency": "serial",
+      "idempotency": "per-intent",
+      "timeoutMs": 20000,
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "mc-launcher.backup",
+      "description": "停止相关进程后备份世界数据与配置，不包含凭证或运行时",
+      "handler": "backup",
+      "scope": "mc-launcher.backup",
+      "concurrency": "serial",
+      "idempotency": "per-intent",
+      "timeoutMs": 120000,
+      "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    }
+  ],
+  "permissions": ["mc-launcher.status", "mc-launcher.provision", "mc-launcher.lifecycle", "mc-launcher.backup"]
+}

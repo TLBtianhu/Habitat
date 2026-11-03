@@ -48,6 +48,11 @@ jobs:
           node clients/verify-onebot-supervisor.mjs
           node clients/verify-bilibili-supervisor.mjs
           node mcp/verify-mcp.mjs
+      - name: MC launcher and runtime package tests
+        run: |
+          node tools/verify-mc-client-lock.mjs
+          node adapters/mc-launcher/verify-provider.mjs
+          node adapters/mc-launcher/verify-runtime-package.mjs
       - name: Control and recovery tests
         run: |
           node control/verify-cross-channel.mjs

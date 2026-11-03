@@ -10,6 +10,13 @@ for (const required of [
   'tools/build-runtime.mjs', 'tools/build-win-exe.mjs', 'tools/win/setup.ps1', 'tools/win/HabitatSetup.cs', 'tools/win/HabitatConsole.cs',
   'tools/verify-win-release.mjs', 'tools/instance-supervisor.mjs', 'tools/verify-instance.mjs', 'tools/verify-settings-live.mjs', 'tools/win/verify-installed-instance.ps1',
   'control/instance-settings.mjs', 'control/verify-instance-settings.mjs', 'tools/win/settings.ps1',
+  'adapters/mc-launcher/provider.mjs', 'adapters/mc-launcher/manifest.json', 'adapters/mc-launcher/verify-provider.mjs',
+  'adapters/mc-launcher/verify-runtime-package.mjs', 'adapters/mc-launcher/licenses/mcpfabric-MIT.txt',
+  'adapters/mc-launcher/licenses/HeadlessMC-MIT.txt', 'adapters/mc-launcher/licenses/Fabric-Installer-Apache-2.0.txt',
+  'adapters/mc-launcher/licenses/Fabric-API-Apache-2.0.txt',
+  'runtime/mc-client-lock.json', 'runtime/mc-client-sbom.json', 'tools/verify-mc-client-lock.mjs',
+  'tools/build-mc-client-runtime.mjs', 'tools/finalize-mc-client-runtime.mjs', 'tools/verify-mc-client-runtime.mjs',
+  'tools/verify-mc-runtime-download.mjs', 'tools/verify-mc-launcher-live.mjs',
   'tools/win/install-signing-tools.ps1', 'tools/win/sign-release.ps1', 'tools/win/verify-signing.ps1', 'tools/win/verify-signing-pipeline.ps1',
   'node_modules/ws/package.json', 'node_modules/@resvg/resvg-js/package.json',
 ]) assert.ok(fs.existsSync(path.join(root, required)), 'missing ' + required);
