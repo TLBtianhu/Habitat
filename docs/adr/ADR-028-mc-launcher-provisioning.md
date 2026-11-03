@@ -1,7 +1,7 @@
 # ADR-028: mc-launcher 世界 provisioning 与运行时发行
 
 日期：2026-11-03
-状态：Accepted（本地真实验收通过；公开运行时发布与生产签名仍待完成）
+状态：Accepted（本地真实验收、CI 与公开下载校验通过；生产签名仍待完成）
 
 ## 背景
 
@@ -54,7 +54,9 @@ Registry 的 `mc-launcher.provision` 工具超时上限为 120 秒。超时返�
 
 不包含完整 `mc-native` 目录、Minecraft assets/libraries、版本缓存、存档、账号、token、日志或开发配置。Minecraft 资源和库仍从官方来源按需取得。
 
-`runtime/mc-client-lock.json` 与 `runtime/mc-client-sbom.json` 记录真实构建的版本和哈希，当前 `distribution=built-not-published`。下载分支必须验证 SHA256、安全解压并通过白名单测试；不能用本机模板路径代替发行包测试。
+`runtime/mc-client-lock.json` 与 `runtime/mc-client-sbom.json` 记录真实构建的版本和哈希，当前 `distribution=published`。下载分支必须验证 SHA256、安全解压并通过白名单测试；不能用本机模板路径代替发行包测试。
+
+运行时归档发布于 [mc-client-runtime-v0.1.0](https://github.com/TLBtianhu/Habitat/releases/tag/mc-client-runtime-v0.1.0)，已从公开地址重新下载并核对归档及逐文件 SHA256。CI run `41650983284` 的 Ubuntu、Windows 与 runtime-smoke 均通过。
 
 ## 验证
 
@@ -66,7 +68,7 @@ Registry 的 `mc-launcher.provision` 工具超时上限为 120 秒。超时返�
 
 ## 尚未完成
 
-- 将 `mc-client-runtime-v0.1.0` 归档发布到锁中记录的 Release，并进行真实公网下载验收。
+- 后续运行时版本的发布、撤销与真实下载回归流程。
 - 世界备份恢复、升级回滚和撤销流程。
 - Windows-hosted MC 房间的真实验收。
 - 生产 Authenticode 签名仍按既有决定延期；本 ADR 不宣称签名已完成。

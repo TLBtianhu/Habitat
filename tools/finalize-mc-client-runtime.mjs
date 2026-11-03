@@ -33,7 +33,7 @@ const lock = {
   bundle: sidecar.bundle,
   version: sidecar.version,
   platform: sidecar.platform,
-  distribution: 'built-not-published',
+  distribution: process.env.HABITAT_MC_CLIENT_RUNTIME_DISTRIBUTION || 'built-not-published',
   source,
   sha256: sidecar.sha256,
   sbom: 'runtime/mc-client-sbom.json',
