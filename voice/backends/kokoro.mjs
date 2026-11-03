@@ -26,7 +26,9 @@ export class KokoroBackend {
   async synthesize(text) {
     const p = this.profile;
     const dir = p.modelDir;
-    const output = path.join('/tmp', `habitat-kokoro-${process.pid}-${++sequence}.wav`);
+    const outputDir = process.env.HABITAT_TMP_ROOT || path.join(process.env.HABITAT_INSTANCE_ROOT || '/opt/habitat', 'tmp');
+    fs.mkdirSync(outputDir, { recursive: true, mode: 0o700 });
+    const output = path.join(outputDir, `habitat-kokoro-${process.pid}-${++sequence}.wav`);
     const args = [
       '--debug=0',
       `--kokoro-model=${path.join(dir, 'model.onnx')}`,

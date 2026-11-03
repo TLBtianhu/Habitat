@@ -11,6 +11,7 @@ for (const required of [
   'tools/verify-win-release.mjs', 'tools/instance-supervisor.mjs', 'tools/verify-instance.mjs', 'tools/verify-settings-live.mjs', 'tools/win/verify-installed-instance.ps1',
   'control/instance-settings.mjs', 'control/verify-instance-settings.mjs', 'control/instance-paths.mjs',
   'control/verify-instance-paths.mjs', 'tools/write-instance-env.mjs', 'tools/relocate-python-venv.mjs', 'tools/win/settings.ps1', 'docs/adr/ADR-029-single-root-instance-assets.md',
+  'voice/backends/kokoro.mjs', 'voice/library.mjs',
   'adapters/mc-launcher/provider.mjs', 'adapters/mc-launcher/manifest.json', 'adapters/mc-launcher/verify-provider.mjs',
   'adapters/mc-launcher/verify-runtime-package.mjs', 'adapters/mc-launcher/licenses/mcpfabric-MIT.txt',
   'adapters/mc-launcher/licenses/HeadlessMC-MIT.txt', 'adapters/mc-launcher/licenses/Fabric-Installer-Apache-2.0.txt',

@@ -16,6 +16,7 @@ export class VoiceLibrary {
     this.policyPath = policyPath;
     this.profiles = new Map();
     this.backends = new Map();
+    const modelRoot = process.env.HABITAT_MODELS_DIR || path.join(process.env.HABITAT_INSTANCE_ROOT || '/opt/habitat', 'data', 'models');
     for (const file of fs.readdirSync(directory)) {
       if (!file.endsWith('.json')) continue;
       const profile = JSON.parse(fs.readFileSync(path.join(directory, file), 'utf8'));
@@ -24,6 +25,7 @@ export class VoiceLibrary {
         enabled: true,
         dafeiyu: false,
         ...profile,
+        modelDir: profile.modelDir ? path.join(modelRoot, 'tts', path.basename(profile.modelDir)) : profile.modelDir,
       });
     }
     try {
