@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRuntime } from './provider.mjs';
+import { execFileSync } from 'node:child_process';
 import { EpisodeStore } from '../../agent/episode-store.mjs';
 
 const root = `/tmp/habitat-launcher-test-${process.pid}`;
@@ -12,7 +13,7 @@ for (const rel of ['headlessmc.jar', 'headlessmc-lwjgl.jar', 'fabric-installer.j
 }
 fs.mkdirSync(`${root}/fake-jdk/bin`, { recursive: true });
 fs.writeFileSync(`${root}/fake-jdk/bin/java`, 'test');
-fs.mkdirSync(`${root}/data/world-server`, { recursive: true });
+fs.mkdirSync(`${root}/data/world-server/world`, { recursive: true });
 fs.writeFileSync(`${root}/data/world-server/server.jar`, 'test');
 const episodes = new EpisodeStore({ root: `${root}/episodes` });
 const episode = episodes.create({ id: 'launcher-episode', goal: '创建并进入本地世界', participants: ['system'] });
@@ -21,6 +22,9 @@ const killed = [];
 let worldUp = false;
 let clientUp = false;
 let nextPid = 5000;
+let failRestore = false;
+let stoppedWorldPid = 0;
+let stoppedClientPid = 0;
 const env = {
   HABITAT_INSTANCE_ROOT: root,
   HABITAT_MC_TOPOLOGY: 'local-wsl',
@@ -36,21 +40,29 @@ const runtime = createRuntime({
   episode,
   episodeStore: episodes,
   spawnImpl: (command, args) => {
+    if (failRestore && args.some((arg) => String(arg).endsWith('server.jar'))) {
+      failRestore = false;
+      throw new Error('simulated world start failure');
+    }
     const child = { pid: ++nextPid, unref() {} };
     spawned.push({ command, args, pid: child.pid });
     if (args.some((arg) => String(arg).endsWith('server.jar'))) worldUp = true;
     if (args.some((arg) => String(arg).endsWith('headlessmc.jar'))) clientUp = true;
     return child;
   },
-  clientFactory: () => ({ info: async () => { if (!clientUp) throw new Error('rpc unavailable'); return { ok: true }; } }),
+  clientFactory: () => ({
+    info: async () => { if (!clientUp) throw new Error('rpc unavailable'); return { ok: true }; },
+    obs: async () => { if (!clientUp) throw new Error('rpc unavailable'); return { mode: 'play' }; },
+  }),
   portProbe: async () => worldUp,
   ownedImpl: () => true,
-  killImpl: (pid, signal) => killed.push({ pid, signal }),
-  execFileImpl: (command, args) => {
-    if (command === 'tar' && args[0] === '-czf') {
-      fs.writeFileSync(args[1], 'backup');
-      return '';
-    }
+  killImpl: (pid, signal) => {
+    killed.push({ pid, signal });
+    if (pid === stoppedWorldPid) worldUp = false;
+    if (pid === stoppedClientPid) clientUp = false;
+  },
+  execFileImpl: (command, args, options) => {
+    if (command === 'tar') return execFileSync(command, args, options);
     return '';
   },
 });
@@ -66,6 +78,8 @@ try {
   assert.ok(episode.revision > 0);
   await runtime.start();
   assert.equal(spawned.length, 2, '重复启动不得创建第二套进程');
+  stoppedWorldPid = started.worldPid;
+  stoppedClientPid = started.clientPid;
   const backup = await runtime.backup();
   assert.ok(fs.existsSync(backup.archive));
   assert.ok(backup.sha256);
@@ -74,7 +88,25 @@ try {
   const stopped = runtime.status();
   assert.equal(stopped.state, 'stopped');
   assert.equal(JSON.stringify(stopped).includes('mcpfabric.token'), false);
-  console.log('ok: mc-launcher provision、同级 Episode、幂等、停止顺序与无凭证备份');
+  await assert.rejects(() => runtime.restore({ archive: path.join(template, 'headlessmc.jar') }), /inside data\/backups/);
+  stoppedWorldPid = started.worldPid;
+  stoppedClientPid = started.clientPid;
+  const restored = await runtime.restore({ archive: backup.archive });
+  assert.equal(restored.state, 'ready');
+  assert.equal(restored.restored, true);
+  assert.equal(episode.phase, 'READY');
+  stoppedWorldPid = restored.worldPid;
+  stoppedClientPid = restored.clientPid;
+  const secondBackup = await runtime.backup();
+  failRestore = true;
+  await assert.rejects(() => runtime.restore({ archive: secondBackup.archive }), (error) => {
+    assert.equal(error.rollback, 'restored');
+    return true;
+  });
+  assert.equal(runtime.status().state, 'ready');
+  assert.ok(fs.existsSync(path.join(root, 'data', 'world-server', 'world')));
+  await runtime.stop();
+  console.log('ok: mc-launcher provision、同级 Episode、幂等、停止顺序、无凭证备份、世界恢复与失败回滚');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }

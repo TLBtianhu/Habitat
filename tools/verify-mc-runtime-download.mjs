@@ -55,7 +55,7 @@ try {
   for (const rel of ['headlessmc.jar', 'headlessmc-lwjgl.jar', 'fabric-installer.jar', 'mods/mcpfabric.jar', 'mods/fabric-api.jar']) {
     assert.ok(fs.existsSync(path.join(root, 'data', 'mc-client', rel)), rel);
   }
-  assert.ok(fs.existsSync(path.join(root, 'data', 'mc-client', 'licenses', 'mcpfabric-MIT.txt')));
+  assert.ok(fs.existsSync(path.join(root, 'runtime', 'mc-client', 'licenses', 'mcpfabric-MIT.txt')));
   assert.ok(!fs.existsSync(path.join(root, 'data', 'mc-client', 'config', 'mcpfabric.token')));
   await runtime.stop();
   console.log('ok: 下载归档 hash、白名单解压、许可证与 provider 启动分支');

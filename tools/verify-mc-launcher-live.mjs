@@ -32,6 +32,12 @@ try {
   assert.equal(started.state, 'ready');
   assert.equal(started.phase, 'READY');
   assert.ok(started.worldPid && started.clientPid);
+  if (process.env.HABITAT_TEST_SHARED_RUNTIME === '1') {
+    for (const rel of ['versions', 'libraries', 'natives', 'assets']) {
+      assert.ok(fs.lstatSync(path.join(root, 'data', 'mc-client', rel)).isSymbolicLink(), `shared runtime link missing: ${rel}`);
+    }
+    assert.ok(fs.existsSync(path.join(root, 'runtime', 'mc-client', 'activation.json')));
+  }
   const client = new NativeMcClient({ rpc: env.HABITAT_MCPFABRIC_RPC, token: fs.readFileSync(env.MCPFABRIC_TOKEN_FILE, 'utf8').trim() });
   const info = await client.info();
   assert.ok(info);
@@ -42,12 +48,18 @@ try {
   assert.equal(again.worldPid, started.worldPid);
   assert.equal(again.clientPid, started.clientPid);
   const backup = await runtime.backup();
-  stopped = true;
   assert.ok(fs.existsSync(backup.archive));
   assert.ok(backup.sha256);
+  const restored = await runtime.restore({ archive: backup.archive });
+  assert.equal(restored.state, 'ready');
+  assert.equal(restored.restored, true);
+  const restoredObservation = await client.obs();
+  assert.equal(restoredObservation.mode, 'play');
+  await runtime.stop();
+  stopped = true;
   assert.equal(episode.phase, 'READY');
-  console.log(JSON.stringify({ world: started.state, rpc: 'ready', episode: episode.phase, backup: path.basename(backup.archive) }));
-  console.log('ok: 真实 Java 世界、AI 客户端、RPC 观测、幂等停止与世界备份');
+  console.log(JSON.stringify({ world: started.state, rpc: 'ready', episode: episode.phase, backup: path.basename(backup.archive), restore: restored.state }));
+  console.log('ok: 真实 Java 世界、AI 客户端、RPC 观测、幂等停止、世界备份与恢复');
 } catch (error) {
   failed = true;
   const logRoot = process.env.HABITAT_TEST_LOG_DIR || path.join(process.cwd(), '.tmp', 'mc-launcher-live-logs');

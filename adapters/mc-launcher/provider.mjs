@@ -95,6 +95,9 @@ export function createRuntime({
   const autoStart = env.HABITAT_MC_LAUNCHER_AUTO_START === '1';
   const worldDir = env.HABITAT_MC_WORLD_DIR || path.join(root, 'data', 'world-server');
   const clientHome = env.HABITAT_MC_CLIENT_HOME || path.join(root, 'data', 'mc-client');
+  const runtimeRoot = env.HABITAT_RUNTIME_ROOT || path.join(root, 'runtime');
+  const sharedClientRoot = env.HABITAT_MC_SHARED_RUNTIME_DIR || path.join(runtimeRoot, 'mc-client');
+  if (path.resolve(sharedClientRoot) === path.resolve(clientHome)) throw new Error('shared MC runtime must be separate from clientHome');
   const serverAddress = env.HABITAT_MC_SERVER_ADDRESS || '127.0.0.1:25565';
   const rpcUrl = env.HABITAT_MCPFABRIC_RPC || 'http://127.0.0.1:25600/rpc';
   const worldState = path.join(worldDir, 'launcher-world.json');
@@ -125,7 +128,7 @@ export function createRuntime({
   async function ensureJdk() {
     const configured = env.HABITAT_JAVA_HOME ? path.join(env.HABITAT_JAVA_HOME, 'bin', 'java') : '';
     if (configured && fs.existsSync(configured)) return env.HABITAT_JAVA_HOME;
-    const jdkHome = path.join(root, 'runtime', 'jdk25');
+    const jdkHome = path.join(runtimeRoot, 'jdk25');
     const java = path.join(jdkHome, 'bin', 'java');
     if (fs.existsSync(java)) return jdkHome;
     const metadataResponse = await fetchImpl('https://api.adoptium.net/v3/assets/latest/25/hotspot?architecture=x64&image_type=jdk&os=linux&vendor=eclipse', { signal: AbortSignal.timeout(30000) });
@@ -148,31 +151,76 @@ export function createRuntime({
     return jdkHome;
   }
 
-  async function ensureClientRuntime() {
-    if (fs.existsSync(path.join(clientHome, 'headlessmc.jar')) && fs.existsSync(path.join(clientHome, 'mods', 'mcpfabric.jar'))) return;
-    const template = env.HABITAT_MC_LAUNCHER_TEMPLATE;
-    if (template) {
-      for (const rel of ['headlessmc.jar', 'headlessmc-lwjgl.jar', 'fabric-installer.jar', 'mods/mcpfabric.jar', 'mods/fabric-api.jar']) {
-        const source = path.join(template, rel);
-        if (!fs.existsSync(source)) throw new Error('template missing ' + rel);
-        fs.mkdirSync(path.dirname(path.join(clientHome, rel)), { recursive: true, mode: 0o700 });
-        fs.copyFileSync(source, path.join(clientHome, rel));
-      }
-      for (const rel of ['versions', 'libraries', 'natives', 'assets']) {
-        const source = path.join(template, rel);
-        if (fs.existsSync(source)) fs.cpSync(source, path.join(clientHome, rel), { recursive: true });
-      }
-    } else {
-      const lock = readJson(new URL('../../runtime/mc-client-lock.json', import.meta.url), {});
-      const url = env.HABITAT_MC_CLIENT_RUNTIME_URL || lock.source;
-      const sha = env.HABITAT_MC_CLIENT_RUNTIME_SHA256 || lock.sha256;
-      if (!url || !sha) throw new Error('mc-client runtime URL and SHA256 required');
-      const archive = path.join(root, 'data', 'downloads', 'mc-client-runtime.tar.gz');
-      await download(url, archive, sha, fetchImpl);
-      safeExtract(archive, clientHome, execFileImpl);
+  function linkDirectory(target, link) {
+    if (!fs.existsSync(target)) throw new Error(`shared runtime directory missing: ${target}`);
+    const current = fs.lstatSync(link, { throwIfNoEntry: false });
+    if (current) {
+      if (!current.isSymbolicLink() && !current.isJunction()) throw new Error(`legacy runtime directory requires explicit migration: ${link}`);
+      if (path.resolve(fs.realpathSync(link)) !== path.resolve(target)) throw new Error(`runtime link points elsewhere: ${link}`);
+      return;
     }
-    if (!fs.existsSync(path.join(clientHome, 'headlessmc.jar'))) throw new Error('mc-client runtime missing headlessmc');
-    if (!fs.existsSync(path.join(clientHome, 'mods', 'mcpfabric.jar'))) throw new Error('mc-client runtime missing mcpfabric');
+    fs.mkdirSync(path.dirname(link), { recursive: true, mode: 0o700 });
+    fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+  }
+
+  function linkRuntimeFile(rel) {
+    const target = path.join(sharedClientRoot, rel);
+    const link = path.join(clientHome, rel);
+    if (!fs.existsSync(target)) throw new Error(`shared runtime file missing: ${rel}`);
+    const current = fs.lstatSync(link, { throwIfNoEntry: false });
+    if (current) {
+      if (!current.isSymbolicLink()) {
+        if (hashFile(link) === hashFile(target)) return;
+        throw new Error(`legacy runtime file requires explicit migration: ${link}`);
+      }
+      if (path.resolve(fs.realpathSync(link)) !== path.resolve(target)) throw new Error(`runtime link points elsewhere: ${link}`);
+      return;
+    }
+    fs.mkdirSync(path.dirname(link), { recursive: true, mode: 0o700 });
+    if (process.platform === 'win32') fs.copyFileSync(target, link);
+    else fs.symlinkSync(target, link);
+  }
+
+  function activateClientRuntime(javaHome) {
+    for (const rel of ['headlessmc.jar', 'headlessmc-lwjgl.jar', 'fabric-installer.jar', 'mods/mcpfabric.jar', 'mods/fabric-api.jar']) {
+      if (!fs.existsSync(path.join(sharedClientRoot, rel))) throw new Error(`mc-client runtime missing ${rel}`);
+    }
+    const activation = path.join(sharedClientRoot, 'activation.json');
+    if (!fs.existsSync(activation)) {
+      const output = execFileImpl(path.join(javaHome, 'bin', 'java'), ['-jar', path.join(sharedClientRoot, 'headlessmc.jar'), '--version'], { encoding: 'utf8', cwd: sharedClientRoot });
+      if (output && !String(output).includes('3.0.0')) throw new Error('headlessmc version self-check failed');
+      writeJson(activation, { schemaVersion: 1, bundle: 'habitat-mc-client-runtime', activatedAt: Date.now(), headlessmcSha256: hashFile(path.join(sharedClientRoot, 'headlessmc.jar')), mcpfabricSha256: hashFile(path.join(sharedClientRoot, 'mods', 'mcpfabric.jar')) });
+    }
+    for (const rel of ['versions', 'libraries', 'natives', 'assets']) fs.mkdirSync(path.join(sharedClientRoot, rel), { recursive: true, mode: 0o700 });
+    for (const rel of ['headlessmc.jar', 'headlessmc-lwjgl.jar', 'fabric-installer.jar', 'mods/mcpfabric.jar', 'mods/fabric-api.jar']) linkRuntimeFile(rel);
+    for (const rel of ['versions', 'libraries', 'natives', 'assets']) linkDirectory(path.join(sharedClientRoot, rel), path.join(clientHome, rel));
+  }
+
+  async function ensureClientRuntime(javaHome) {
+    if (!fs.existsSync(path.join(sharedClientRoot, 'headlessmc.jar')) || !fs.existsSync(path.join(sharedClientRoot, 'mods', 'mcpfabric.jar'))) {
+      const template = env.HABITAT_MC_LAUNCHER_TEMPLATE;
+      if (template) {
+        for (const rel of ['headlessmc.jar', 'headlessmc-lwjgl.jar', 'fabric-installer.jar', 'mods/mcpfabric.jar', 'mods/fabric-api.jar']) {
+          const source = path.join(template, rel);
+          if (!fs.existsSync(source)) throw new Error('template missing ' + rel);
+          fs.mkdirSync(path.dirname(path.join(sharedClientRoot, rel)), { recursive: true, mode: 0o700 });
+          fs.copyFileSync(source, path.join(sharedClientRoot, rel));
+        }
+        for (const rel of ['versions', 'libraries', 'natives', 'assets']) {
+          const source = path.join(template, rel);
+          if (fs.existsSync(source)) fs.cpSync(source, path.join(sharedClientRoot, rel), { recursive: true });
+        }
+      } else {
+        const lock = readJson(new URL('../../runtime/mc-client-lock.json', import.meta.url), {});
+        const url = env.HABITAT_MC_CLIENT_RUNTIME_URL || lock.source;
+        const sha = env.HABITAT_MC_CLIENT_RUNTIME_SHA256 || lock.sha256;
+        if (!url || !sha) throw new Error('mc-client runtime URL and SHA256 required');
+        const archive = path.join(root, 'data', 'downloads', 'mc-client-runtime.tar.gz');
+        await download(url, archive, sha, fetchImpl);
+        safeExtract(archive, sharedClientRoot, execFileImpl);
+      }
+    }
+    activateClientRuntime(javaHome);
   }
 
   async function ensureWorld() {
@@ -226,7 +274,12 @@ export function createRuntime({
       return;
     }
     if (existingPids.length) await stopOne(existingPids[0], marker, worldState);
-    if (await portProbe(serverHost, serverPort)) throw new Error('world port already occupied by an unmanaged process');
+    let occupied = await portProbe(serverHost, serverPort);
+    for (let attempt = 0; occupied && attempt < 20; attempt += 1) {
+      await sleep(100);
+      occupied = await portProbe(serverHost, serverPort);
+    }
+    if (occupied) throw new Error('world port already occupied by an unmanaged process');
     await ensureWorld();
     const log = fs.openSync(path.join(worldDir, 'server.log'), 'a');
     const child = spawnImpl(path.join(javaHome, 'bin', 'java'), ['-Xms1G', '-Xmx2G', '-jar', path.join(worldDir, 'server.jar'), 'nogui'], {
@@ -280,10 +333,8 @@ export function createRuntime({
     const profile = env.HABITAT_MC_FABRIC_PROFILE || 'fabric 1.21.4';
     const xdgData = path.join(clientHome, '.xdg', 'data');
     const managedJavaHome = path.join(xdgData, 'headlessmc', 'java', 'temurin', '21');
-    if (env.HABITAT_MC_JAVA_HOME && !fs.existsSync(managedJavaHome)) {
-      fs.mkdirSync(path.dirname(managedJavaHome), { recursive: true, mode: 0o700 });
-      fs.cpSync(env.HABITAT_MC_JAVA_HOME, managedJavaHome, { recursive: true });
-    }
+    const managedJavaTarget = env.HABITAT_MC_JAVA_HOME || path.join(runtimeRoot, 'java', 'jdk21');
+    if (!fs.existsSync(managedJavaHome) && fs.existsSync(managedJavaTarget)) linkDirectory(managedJavaTarget, managedJavaHome);
     const javaArgs = [`-Dhmc.files.mc=${clientHome}`, `-Duser.home=${clientHome}`, ...(fs.existsSync(managedJavaHome) ? ['-Dhmc.java.download=false'] : [])];
     const childEnv = {
       ...process.env,
@@ -362,7 +413,7 @@ export function createRuntime({
     state = 'provisioning';
     checkpoint('PROVISION', '准备本地 MC 世界');
     const javaHome = await ensureJdk();
-    await ensureClientRuntime();
+    await ensureClientRuntime(javaHome);
     await startWorld(javaHome);
     await startClient(javaHome);
     state = 'ready';
@@ -392,6 +443,74 @@ export function createRuntime({
     return { archive, sha256: hashFile(archive), status: status() };
   }
 
+  async function restore({ archive }) {
+    const backupDir = path.join(root, 'data', 'backups');
+    const source = fs.realpathSync(path.resolve(String(archive || '')));
+    const relativeArchive = path.relative(backupDir, source);
+    if (!relativeArchive || relativeArchive === '..' || relativeArchive.startsWith(`..${path.sep}`) || path.isAbsolute(relativeArchive)) throw new Error('restore archive must be inside data/backups');
+    if (!fs.statSync(source).isFile()) throw new Error('restore archive is not a file');
+    const javaHome = await ensureJdk();
+    await ensureClientRuntime(javaHome);
+    await stop();
+    const work = path.join(root, 'state', 'mc-restore', `${Date.now()}-${process.pid}`);
+    const staging = path.join(work, 'staging');
+    const previous = path.join(work, 'previous');
+    let moved = false;
+    try {
+      fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
+      safeExtract(source, staging, execFileImpl);
+      const allowed = new Set(['world', 'eula.txt', 'ops.json', 'whitelist.json', 'banned-ips.json', 'banned-players.json']);
+      for (const name of fs.readdirSync(staging)) if (!allowed.has(name)) throw new Error(`unexpected restore entry: ${name}`);
+      if (!fs.existsSync(path.join(staging, 'world'))) throw new Error('restore archive has no world data');
+      if (fs.existsSync(worldDir)) {
+        fs.renameSync(worldDir, previous);
+        moved = true;
+      }
+      fs.mkdirSync(worldDir, { recursive: true, mode: 0o700 });
+      for (const name of ['server.jar', 'server.properties']) {
+        const oldFile = path.join(previous, name);
+        if (fs.existsSync(oldFile)) fs.copyFileSync(oldFile, path.join(worldDir, name));
+      }
+      fs.cpSync(staging, worldDir, { recursive: true });
+      await startWorld(javaHome);
+      await startClient(javaHome);
+      const observation = await makeClient().obs();
+      if (observation?.mode !== 'play') throw new Error('restored world observation is not play');
+      state = 'ready';
+      lastError = null;
+      checkpoint('READY', '世界恢复与 RPC 观测已验证');
+      fs.rmSync(work, { recursive: true, force: true });
+      return { ...status(), restored: true, archive: source, observation: observation.mode };
+    } catch (error) {
+      lastError = error.message;
+      let rollback = 'not-needed';
+      if (moved) {
+        await stop().catch(() => {});
+        fs.rmSync(worldDir, { recursive: true, force: true });
+        fs.renameSync(previous, worldDir);
+        try {
+          await startWorld(javaHome);
+          await startClient(javaHome);
+          state = 'ready';
+          lastError = null;
+          checkpoint('READY', '恢复失败，已回滚到原世界');
+          rollback = 'restored';
+        } catch (rollbackError) {
+          state = 'error';
+          lastError = rollbackError.message;
+          checkpoint('ERROR', '原世界回滚失败，需要人工恢复');
+          rollback = 'degraded';
+          error.message += `; rollback failed: ${rollbackError.message}`;
+        }
+      } else {
+        state = 'error';
+        checkpoint('ERROR', '世界恢复失败');
+      }
+      error.rollback = rollback;
+      throw error;
+    }
+  }
+
   function status() {
     return {
       state,
@@ -419,6 +538,7 @@ export function createRuntime({
     stop,
     provision,
     backup,
+    restore,
     status,
   };
 }
@@ -429,5 +549,6 @@ export function createHandlers({ runtime }) {
     provision: () => runtime.provision(),
     stop: () => runtime.stop(),
     backup: () => runtime.backup(),
+    restore: (args) => runtime.restore(args),
   };
 }

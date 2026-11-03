@@ -42,6 +42,7 @@ Registry 的 `mc-launcher.provision` 工具超时上限为 120 秒。超时返�
 - 停止时先停止 AI 客户端，再停止世界；对实例目录验证过的进程组发信号，绝不使用全局 `pkill` 或 `wsl --shutdown`。
 - 旧进程、token 或配置不匹配时可以替换；加入世界中的 `no_client_player` 不触发替换。
 - 备份只包含世界数据与配置，不包含 token、账号、运行时缓存或日志。
+- 恢复仅接受 `data/backups` 内的白名单归档，经暂存替换和 RPC 验收；失败自动回滚到原世界。
 
 ### 4. 最小可分发运行时
 
@@ -60,15 +61,15 @@ Registry 的 `mc-launcher.provision` 工具超时上限为 120 秒。超时返�
 
 ## 验证
 
-- `node adapters/mc-launcher/verify-provider.mjs`：Episode、幂等、停止顺序、无凭证备份。
+- `node adapters/mc-launcher/verify-provider.mjs`：Episode、幂等、停止顺序、无凭证备份、世界恢复与失败回滚。
 - `node adapters/mc-launcher/verify-runtime-package.mjs`：归档白名单、哈希、许可证和下载安装分支。
 - `node tools/verify-mc-client-lock.mjs`：运行时锁与 CycloneDX SBOM。
-- `node tools/verify-mc-launcher-live.mjs`：真实 Java 世界、AI 客户端、mcpfabric RPC 观测、幂等停止和世界备份，已通过当前 WSL 验收。
+- `node tools/verify-mc-launcher-live.mjs`：真实 Java 世界、AI 客户端、mcpfabric RPC 观测、幂等停止、世界备份与恢复，已通过当前 WSL 验收。
 - CI 运行前三项；真实 Java 验收需要本机 Java、网络和资源，不伪造成 CI 的快速单元测试。
 
 ## 尚未完成
 
 - 后续运行时版本的发布、撤销与真实下载回归流程。
-- 世界备份恢复、升级回滚和撤销流程。
+- 生产环境 `autoStart` 的逐步启用与持续健康检查。
 - Windows-hosted MC 房间的真实验收。
 - 生产 Authenticode 签名仍按既有决定延期；本 ADR 不宣称签名已完成。

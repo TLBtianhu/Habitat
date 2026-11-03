@@ -9,9 +9,9 @@
   "session": { "kind": "mc-launcher", "view": { "kind": "launcher" } },
   "provider": "provider.mjs",
   "entry": "server.mjs",
-  "capabilities": ["mc-launcher.provision", "mc-launcher.lifecycle", "mc-launcher.backup"],
+  "capabilities": ["mc-launcher.provision", "mc-launcher.lifecycle", "mc-launcher.backup", "mc-launcher.restore"],
   "authFlows": ["offline"],
-  "scopes": ["mc-launcher.status", "mc-launcher.provision", "mc-launcher.lifecycle", "mc-launcher.backup"],
+  "scopes": ["mc-launcher.status", "mc-launcher.provision", "mc-launcher.lifecycle", "mc-launcher.backup", "mc-launcher.restore"],
   "tools": [
     {
       "name": "mc-launcher.status",
@@ -52,7 +52,22 @@
       "idempotency": "per-intent",
       "timeoutMs": 120000,
       "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    },
+    {
+      "name": "mc-launcher.restore",
+      "description": "校验并恢复世界备份，启动和 RPC 验证失败时回滚到原世界",
+      "handler": "restore",
+      "scope": "mc-launcher.restore",
+      "concurrency": "serial",
+      "idempotency": "per-intent",
+      "timeoutMs": 120000,
+      "inputSchema": {
+        "type": "object",
+        "properties": { "archive": { "type": "string", "description": "data/backups 内的世界备份 tar.gz 路径" } },
+        "required": ["archive"],
+        "additionalProperties": false
+      }
     }
   ],
-  "permissions": ["mc-launcher.status", "mc-launcher.provision", "mc-launcher.lifecycle", "mc-launcher.backup"]
+  "permissions": ["mc-launcher.status", "mc-launcher.provision", "mc-launcher.lifecycle", "mc-launcher.backup", "mc-launcher.restore"]
 }
