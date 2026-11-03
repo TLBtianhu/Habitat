@@ -111,7 +111,6 @@ export class BiliConnectionSupervisor {
       type: event.type,
       user: event.user,
       text: event.text || event.name,
-      second: Math.floor(now / 1000),
     })).digest('hex').slice(0, 24);
     if (this.seen.has(fingerprint) && now - this.seen.get(fingerprint) < 5000) return;
     this.seen.set(fingerprint, now);

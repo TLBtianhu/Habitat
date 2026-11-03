@@ -3,6 +3,7 @@ import { BiliConnectionSupervisor } from './bilibili-supervisor.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const clients = [];
+const realNow = Date.now;
 function factory({ onEvent }) {
   const client = {
     connect: async () => { setTimeout(() => onEvent({ type: 'open' }), 0); },
@@ -18,9 +19,13 @@ try {
   await supervisor.start();
   await sleep(10);
   const client = clients[0];
+  const baseTime = realNow();
+  Date.now = () => baseTime;
   client.emit({ type: 'danmaku', user: 'alice', text: 'hello' });
+  Date.now = () => baseTime + 1001;
   client.emit({ type: 'danmaku', user: 'alice', text: 'hello' });
   client.emit({ type: 'danmaku', user: 'bob', text: 'hello' });
+  Date.now = realNow;
   const obs = supervisor.obs();
   assert.equal(obs.new.length, 2, '同秒重复帧去重，不同用户不合并');
   assert.equal(obs.new[0].type, 'app.bilibili.danmaku');
@@ -45,5 +50,6 @@ try {
   assert.equal(JSON.stringify(supervisor.status()).includes('secret'), false);
   console.log('ok: B站连接开/关、有限去重、重连、心跳超时与停止');
 } finally {
+  Date.now = realNow;
   // 测试中的客户端均已关闭；不保留重连定时器。
 }
