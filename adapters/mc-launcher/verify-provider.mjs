@@ -72,10 +72,23 @@ try {
   assert.equal(started.phase, 'READY');
   assert.ok(started.worldPid && started.clientPid);
   assert.equal(spawned.length, 2);
+  if (process.platform !== 'win32') {
+    for (const rel of ['versions', 'libraries', 'natives', 'assets']) {
+      assert.equal(path.isAbsolute(fs.readlinkSync(path.join(root, 'data', 'mc-client', rel))), false, `${rel} 必须使用根内相对链接`);
+    }
+  }
   assert.equal(episode.phase, 'READY');
   assert.equal(episode.participants.includes('mc-launcher.local'), true);
   assert.equal(episode.participants.includes('mc.world.current'), true);
   assert.ok(episode.revision > 0);
+  if (process.platform !== 'win32') {
+    const moved = `${root}-moved`;
+    fs.renameSync(root, moved);
+    for (const rel of ['versions', 'libraries', 'natives', 'assets']) {
+      assert.ok(fs.realpathSync(path.join(moved, 'data', 'mc-client', rel)).startsWith(moved), `${rel} 移动后脱离根目录`);
+    }
+    fs.renameSync(moved, root);
+  }
   await runtime.start();
   assert.equal(spawned.length, 2, '重复启动不得创建第二套进程');
   stoppedWorldPid = started.worldPid;

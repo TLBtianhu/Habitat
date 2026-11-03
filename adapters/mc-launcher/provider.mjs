@@ -160,7 +160,7 @@ export function createRuntime({
       return;
     }
     fs.mkdirSync(path.dirname(link), { recursive: true, mode: 0o700 });
-    fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
+    fs.symlinkSync(path.relative(path.dirname(link), target), link, process.platform === 'win32' ? 'junction' : 'dir');
   }
 
   function linkRuntimeFile(rel) {
@@ -178,7 +178,7 @@ export function createRuntime({
     }
     fs.mkdirSync(path.dirname(link), { recursive: true, mode: 0o700 });
     if (process.platform === 'win32') fs.copyFileSync(target, link);
-    else fs.symlinkSync(target, link);
+    else fs.symlinkSync(path.relative(path.dirname(link), target), link);
   }
 
   function activateClientRuntime(javaHome) {

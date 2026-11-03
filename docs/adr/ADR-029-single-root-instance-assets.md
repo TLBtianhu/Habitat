@@ -34,7 +34,7 @@ Habitat 的每个安装实例只有一个根目录。解耦通过子目录完成
 
 正式实例不得依赖系统 Java/Python/Node、全局 npm/pip、`~/.minecraft`、`~/.local/share/headlessmc`、开发机绝对路径或根目录外的共享缓存。
 
-`JAVA_HOME`、`PYTHONHOME`、`HOME`、`XDG_*`、运行时 `PATH` 和激活配置必须指向当前实例根内部。环境目录必须能够整体移动、替换、备份和删除。
+`JAVA_HOME`、`PYTHONHOME`、`HOME`、`XDG_*`、运行时 `PATH` 和激活配置必须指向当前实例根内部。环境目录必须能够整体移动、替换、备份和删除。共享 MC 缓存使用根内相对链接，移动根目录后仍需通过链接和解释器自检。
 
 ## 生产迁移映射
 
