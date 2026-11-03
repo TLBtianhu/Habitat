@@ -57,8 +57,14 @@ $recoverButton.Size = New-Object System.Drawing.Size(130, 40)
 $recoverButton.Location = New-Object System.Drawing.Point(495, 210)
 $form.Controls.Add($recoverButton)
 
+$settingsButton = New-Object System.Windows.Forms.Button
+$settingsButton.Text = '设置中心'
+$settingsButton.Size = New-Object System.Drawing.Size(130, 30)
+$settingsButton.Location = New-Object System.Drawing.Point(495, 252)
+$form.Controls.Add($settingsButton)
+
 $tokenLabel = New-Object System.Windows.Forms.Label
-$tokenLabel.Text = 'Owner token（仅本次恢复使用，不保存）'
+$tokenLabel.Text = 'Owner token（用于恢复和设置，不保存）'
 $tokenLabel.AutoSize = $true
 $tokenLabel.Location = New-Object System.Drawing.Point(30, 275)
 $form.Controls.Add($tokenLabel)
@@ -132,6 +138,15 @@ $stopButton.Add_Click({
   } catch {
     Set-Busy $false ("停止未完成：" + $_.Exception.Message)
   }
+})
+
+$settingsButton.Add_Click({
+  if ([string]::IsNullOrWhiteSpace($tokenBox.Text)) {
+    [System.Windows.Forms.MessageBox]::Show('设置中心需要 owner token。token 只在本机内存中使用，不会保存。', '需要 owner token') | Out-Null
+    return
+  }
+  & (Join-Path $PSScriptRoot 'settings.ps1') -ControlBaseUrl $controlBase -OwnerToken $tokenBox.Text
+  $tokenBox.Clear()
 })
 
 $refreshButton.Add_Click({ Refresh-Status })

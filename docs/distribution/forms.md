@@ -21,7 +21,8 @@
 - 配置与用户数据放 '%APPDATA%/Habitat'，大模型/缓存放 '%LOCALAPPDATA%/Habitat/cache'；
 - 卸载默认保留配置、记忆、模型和用户数据，只有明确 purge 才清理；
 - 安装版由 WSL 当前用户的 supervisor 启停，使用独立 102xx 端口和 data/config，不借用开发现实例的 systemctl 服务；
-- 默认不连接外部应用；缺 LLM 配置时显示 configuration_required，不伪造人格在线。
+- 默认不连接外部应用；缺 LLM 配置时显示 configuration_required，不伪造人格在线；
+- 控制台设置中心可随时修改配置，保存与生效状态分离，secret 仅在本机内存中使用且不回显。
 
 ### Windows 只保留两个 EXE
 

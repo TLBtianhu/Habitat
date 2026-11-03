@@ -8,7 +8,8 @@ for (const required of [
   'agent/run-continuous.mjs', 'clients/mcpfabric-token.mjs', 'package.json', 'package-lock.json',
   'tools/install-user.ps1', 'tools/install.mjs', 'tools/wsl-install.sh', 'tools/verify-install.sh',
   'tools/build-runtime.mjs', 'tools/build-win-exe.mjs', 'tools/win/setup.ps1', 'tools/win/HabitatSetup.cs', 'tools/win/HabitatConsole.cs',
-  'tools/verify-win-release.mjs', 'tools/instance-supervisor.mjs', 'tools/verify-instance.mjs', 'tools/win/verify-installed-instance.ps1',
+  'tools/verify-win-release.mjs', 'tools/instance-supervisor.mjs', 'tools/verify-instance.mjs', 'tools/verify-settings-live.mjs', 'tools/win/verify-installed-instance.ps1',
+  'control/instance-settings.mjs', 'control/verify-instance-settings.mjs', 'tools/win/settings.ps1',
   'node_modules/ws/package.json', 'node_modules/@resvg/resvg-js/package.json',
 ]) assert.ok(fs.existsSync(path.join(root, required)), 'missing ' + required);
 for (const forbidden of ['tools/bridge.mjs', 'display/server.mjs']) {

@@ -12,6 +12,7 @@ import { CrossChannelTasks } from './cross-channel.mjs';
 import { AfterActionStore } from '../agent/after-action.mjs';
 import { PluginInstaller } from './plugin-installer.mjs';
 import { RecoveryManager } from './recovery.mjs';
+import { InstanceSettings } from './instance-settings.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STAGE_ORIGIN = process.env.HABITAT_STAGE || 'http://127.0.0.1:9230';
@@ -97,6 +98,7 @@ const pluginInstaller = new PluginInstaller({
   cacheDir: process.env.HABITAT_PLUGIN_CACHE || '/var/lib/habitat/plugins',
 });
 const recovery = new RecoveryManager();
+const instanceSettings = new InstanceSettings();
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 function json(res, code, body) {
@@ -214,6 +216,18 @@ http.createServer(async (req, res) => {
     return;
   }
   if (req.method === 'GET' && url.pathname === '/status') return json(res, 200, state);
+  if (url.pathname === '/settings') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try {
+      if (req.method === 'GET') return json(res, 200, instanceSettings.get());
+      if (req.method === 'POST') return json(res, 200, await instanceSettings.save(await readJson(req)));
+    } catch (e) { return json(res, e.code || 400, { error: e.message }); }
+  }
+  if (req.method === 'POST' && url.pathname === '/settings/reapply') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, await instanceSettings.save({ reapply: true })); }
+    catch (e) { return json(res, e.code || 400, { error: e.message }); }
+  }
   if (req.method === 'GET' && url.pathname === '/lifecycle') return json(res, 200, recovery.status());
   if (req.method === 'POST' && url.pathname === '/recovery') {
     if (!isOwner(req)) return json(res, 403, { error: 'owner required' });

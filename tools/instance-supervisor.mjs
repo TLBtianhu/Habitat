@@ -4,6 +4,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { computeSettingsHash } from '../control/instance-settings.mjs';
 
 const SCRIPT = fileURLToPath(import.meta.url);
 const args = process.argv.slice(2);
@@ -85,6 +86,9 @@ function environment(ports, config) {
     HABITAT_VOICE_URL: `http://127.0.0.1:${ports.voice}`,
     HABITAT_AUDIO_URL: `http://127.0.0.1:${ports.audio}`,
     HABITAT_OUTLET_URL: `http://127.0.0.1:${ports.outlet}`,
+    HABITAT_ONEBOT_WS_URL: config.connections?.qq?.wsUrl || '',
+    HABITAT_ONEBOT_HTTP_URL: config.connections?.qq?.httpUrl || '',
+    HABITAT_BILIBILI_ROOM_ID: String(config.connections?.bilibili?.roomId || 0),
     HABITAT_STAGE: `http://127.0.0.1:${ports.stage}`,
     HABITAT_VOICE: `http://127.0.0.1:${ports.voice}`,
     HABITAT_OWNER_TOKEN_FILE: path.join(CONFIG, 'owner.token'),
@@ -176,6 +180,63 @@ function spawnService(id, script, { required = true, env }) {
   persistStatus();
 }
 
+async function stopEntry(entry) {
+  if (!entry) return;
+  if (alive(entry.child.pid)) {
+    entry.state = 'stopping';
+    persistStatus();
+    try { entry.child.kill('SIGTERM'); } catch {}
+    const deadline = Date.now() + 6000;
+    while (alive(entry.child.pid) && Date.now() < deadline) await sleep(100);
+    if (alive(entry.child.pid)) {
+      try { entry.child.kill('SIGKILL'); } catch {}
+      entry.lastError = 'forced_after_timeout';
+    }
+  }
+  entry.state = 'stopped';
+  persistStatus();
+}
+
+let reconcileBusy = false;
+async function reconcileConfiguration() {
+  if (stopping || reconcileBusy || !currentStatus || currentStatus.state === 'starting') return;
+  reconcileBusy = true;
+  try {
+    const hash = computeSettingsHash(CONFIG);
+    if (hash === currentStatus.appliedConfigHash) return;
+    const { value: config, ports } = instanceConfig();
+    if (JSON.stringify(ports) !== JSON.stringify(currentPorts)) {
+      currentStatus.state = 'degraded';
+      currentStatus.configurationRequired = ['restart_required'];
+      persistStatus();
+      return;
+    }
+    currentStatus.state = 'reconciling';
+    currentStatus.configurationRequired = config.agent !== false && !fs.existsSync(path.join(CONFIG, 'llm.json')) ? ['llm'] : [];
+    currentStatus.applyError = null;
+    persistStatus();
+    const env = environment(ports, config);
+    const existing = children.get('agent');
+    if (existing) {
+      await stopEntry(existing);
+      children.delete('agent');
+    }
+    if (config.agent !== false && fs.existsSync(path.join(CONFIG, 'llm.json'))) {
+      spawnService('agent', 'agent/run-continuous.mjs', { required: false, env });
+    }
+    currentStatus.appliedConfigHash = hash;
+    currentStatus.state = 'running';
+    persistStatus();
+  } catch (error) {
+    currentStatus.state = 'degraded';
+    currentStatus.configurationRequired = ['apply_failed'];
+    currentStatus.applyError = error.message;
+    persistStatus();
+  } finally {
+    reconcileBusy = false;
+  }
+}
+
 async function runSupervisor() {
   const { value: config, ports } = instanceConfig();
   currentPorts = ports;
@@ -194,6 +255,7 @@ async function runSupervisor() {
   ];
   for (const [id, script, required] of services) spawnService(id, script, { required, env });
   if (config.agent !== false && fs.existsSync(path.join(CONFIG, 'llm.json'))) spawnService('agent', 'agent/run-continuous.mjs', { required: false, env });
+  currentStatus.appliedConfigHash = computeSettingsHash(CONFIG);
   currentStatus.state = 'running';
   persistStatus();
   const shutdown = async () => {
@@ -201,19 +263,8 @@ async function runSupervisor() {
     stopping = true;
     currentStatus.state = 'stopping';
     persistStatus();
-    for (const [id, entry] of [...children.entries()].reverse()) {
-      if (!alive(entry.child.pid)) continue;
-      entry.state = 'stopping';
-      persistStatus();
-      try { entry.child.kill('SIGTERM'); } catch {}
-      const deadline = Date.now() + 6000;
-      while (alive(entry.child.pid) && Date.now() < deadline) await sleep(100);
-      if (alive(entry.child.pid)) {
-        try { entry.child.kill('SIGKILL'); } catch {}
-        entry.lastError = 'forced_after_timeout';
-      }
-      entry.state = 'stopped';
-      persistStatus();
+    for (const [, entry] of [...children.entries()].reverse()) {
+      await stopEntry(entry);
     }
     currentStatus.state = 'stopped';
     persistStatus();
@@ -222,7 +273,7 @@ async function runSupervisor() {
   };
   process.once('SIGTERM', shutdown);
   process.once('SIGINT', shutdown);
-  setInterval(() => persistStatus(), 5000).unref();
+  setInterval(() => { persistStatus(); void reconcileConfiguration(); }, 1000).unref();
 }
 
 async function waitHealth(ports, timeoutMs = 30000) {

@@ -37,7 +37,7 @@ function Register-Client {
   New-Item -ItemType Directory -Path $ClientDir -Force | Out-Null
   $tools = Join-Path $ClientDir 'tools\win'
   New-Item -ItemType Directory -Path $tools -Force | Out-Null
-  $files = @('client.ps1', 'lifecycle.psm1', 'habitat.ps1', 'resume-habitat.ps1', 'setup.ps1', 'HabitatConsole.exe', 'HabitatSetup.exe')
+  $files = @('client.ps1', 'settings.ps1', 'lifecycle.psm1', 'habitat.ps1', 'resume-habitat.ps1', 'setup.ps1', 'HabitatConsole.exe', 'HabitatSetup.exe')
   foreach ($file in $files) {
     $source = Join-Path $PayloadRoot "tools\win\$file"
     if (-not (Test-Path $source)) { throw "缺少客户端载荷: $file" }

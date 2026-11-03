@@ -69,4 +69,7 @@ if ($script:installedCommands -match 'systemctl|wsl-stop\.sh') { throw '安装�
 $parseErrors = $null
 $null = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'client.ps1'), [ref]$null, [ref]$parseErrors)
 if ($parseErrors.Count) { throw "client.ps1 语法错误: $($parseErrors[0].Message)" }
+$parseErrors = $null
+$null = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot 'settings.ps1'), [ref]$null, [ref]$parseErrors)
+if ($parseErrors.Count) { throw "settings.ps1 语法错误: $($parseErrors[0].Message)" }
 Write-Output 'ok: Windows 客户端 WSL 检测、启停、失败不伪报、异常恢复与禁止全局关机'

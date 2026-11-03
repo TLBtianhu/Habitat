@@ -53,6 +53,8 @@ try {
   # 重复启动必须幂等，不创建第二套进程。
   & (Join-Path $root 'tools\win\habitat.ps1') -Action start -InstallRoot $installRoot | Out-Null
   Assert-Instance running
+  wsl -d Ubuntu -u $wslUser -- "$installRoot/runtime/node22/bin/node" "$installRoot/app/tools/verify-settings-live.mjs" $installRoot
+  if ($LASTEXITCODE -ne 0) { throw 'settings live apply failed' }
 
   # 只杀测试 supervisor，保留子进程，验证 recovery_required 与安全清理。
   $status = (wsl -d Ubuntu -u $wslUser -- "$installRoot/runtime/node22/bin/node" "$installRoot/app/tools/instance-supervisor.mjs" status --root $installRoot | ConvertFrom-Json)
