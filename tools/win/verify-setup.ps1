@@ -4,6 +4,8 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $payloadRoot = Join-Path $root 'dist\win'
 $package = Join-Path $payloadRoot 'payload\fishbowl-v0.1.zip'
 $setupExe = Join-Path $payloadRoot 'tools\win\HabitatSetup.exe'
+$standaloneDir = Join-Path $root '.tmp\standalone-setup'
+$standaloneExe = Join-Path $standaloneDir 'HabitatSetup.exe'
 $setupScript = Join-Path $payloadRoot 'tools\win\setup.ps1'
 $defaultWslUser = (wsl -d Ubuntu -- whoami).Trim()
 if ($defaultWslUser -eq 'root') {
@@ -27,6 +29,7 @@ function Cleanup {
   wsl -d Ubuntu -- bash -lc "rm -rf -- '$installRoot'" | Out-Null
   Remove-Item -LiteralPath $clientDir -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -LiteralPath $startMenuDir -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-Item -LiteralPath $standaloneDir -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -Path $env:HABITAT_REGISTRY_ROOT -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -Path $env:HABITAT_UNINSTALL_KEY -Recurse -Force -ErrorAction SilentlyContinue
   Remove-Item -Path $env:HABITAT_PROTOCOL_ROOT -Recurse -Force -ErrorAction SilentlyContinue
@@ -36,8 +39,10 @@ function Cleanup {
 }
 Cleanup -KeepEnvironment
 wsl -d Ubuntu -- bash -lc "mkdir -p '$installRoot/data' && if [ -f '$runtimeArchive' ]; then cp '$runtimeArchive' '$installRoot/data/runtime.tar.gz'; fi"
+New-Item -ItemType Directory -Path $standaloneDir -Force | Out-Null
+Copy-Item -LiteralPath $setupExe -Destination $standaloneExe -Force
 try {
-  & $setupExe upgrade $package $installRoot
+  & $standaloneExe upgrade $package $installRoot
   if ($LASTEXITCODE -ne 0) { throw 'Setup EXE 安装失败' }
   wsl -d Ubuntu -- bash -lc "test -f '$installRoot/app/agent/run-continuous.mjs' && test -x '$installRoot/runtime/node22/bin/node' && test -d '$installRoot/data' && test -d '$installRoot/config'"
   if ($LASTEXITCODE -ne 0) { throw '安装应用、运行时或数据目录不存在' }

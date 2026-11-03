@@ -10,6 +10,7 @@ for (const required of [
   'tools/build-runtime.mjs', 'tools/build-win-exe.mjs', 'tools/win/setup.ps1', 'tools/win/HabitatSetup.cs', 'tools/win/HabitatConsole.cs',
   'tools/verify-win-release.mjs', 'tools/instance-supervisor.mjs', 'tools/verify-instance.mjs', 'tools/verify-settings-live.mjs', 'tools/win/verify-installed-instance.ps1',
   'control/instance-settings.mjs', 'control/verify-instance-settings.mjs', 'tools/win/settings.ps1',
+  'tools/win/install-signing-tools.ps1', 'tools/win/sign-release.ps1', 'tools/win/verify-signing.ps1', 'tools/win/verify-signing-pipeline.ps1',
   'node_modules/ws/package.json', 'node_modules/@resvg/resvg-js/package.json',
 ]) assert.ok(fs.existsSync(path.join(root, required)), 'missing ' + required);
 for (const forbidden of ['tools/bridge.mjs', 'display/server.mjs']) {
@@ -28,6 +29,8 @@ assert.ok(runtimeBuild.includes('verbatimSymlinks'));
 const supervisor = fs.readFileSync(path.join(root, 'tools/instance-supervisor.mjs'), 'utf8');
 assert.ok(supervisor.includes('HABITAT_LLM_CONFIG'));
 assert.ok(supervisor.includes('recovery_required'));
+const winBuild = fs.readFileSync(path.join(root, 'tools/build-win-exe.mjs'), 'utf8');
+assert.ok(winBuild.includes('/resource:'), 'Setup EXE must embed its payload');
 const installMjs = fs.readFileSync(path.join(root, 'tools/install.mjs'), 'utf8');
 assert.ok(installMjs.includes('LOCALAPPDATA'));
 const wslInstall = fs.readFileSync(path.join(root, 'tools/wsl-install.sh'), 'utf8');

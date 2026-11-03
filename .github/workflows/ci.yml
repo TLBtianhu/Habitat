@@ -80,6 +80,10 @@ jobs:
         run: |
           node tools/build-win-exe.mjs
           node tools/verify-win-release.mjs
+      - name: Authenticode signing pipeline test
+        if: matrix.os == 'windows-latest'
+        shell: powershell
+        run: powershell -NoProfile -File tools/win/verify-signing-pipeline.ps1
       - name: Cache Setup runtime archive
         if: matrix.os == 'windows-latest'
         uses: actions/cache@v4

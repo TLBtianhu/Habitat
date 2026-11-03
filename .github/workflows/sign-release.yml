@@ -1,0 +1,74 @@
+name: sign-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (for example 0.1.0)'
+        required: true
+        default: '0.1.0'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  sign:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      HABITAT_CI: '1'
+      HABITAT_CODESIGN_PFX_BASE64: ${{ secrets.HABITAT_CODESIGN_PFX_BASE64 }}
+      HABITAT_CODESIGN_PASSWORD: ${{ secrets.HABITAT_CODESIGN_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify public snapshot
+        run: node tools/verify-public-release.mjs
+      - name: Build distribution
+        run: |
+          node tools/package.mjs
+          node tools/verify-distribution.mjs
+          node tools/build-win-exe.mjs
+          node tools/verify-win-release.mjs
+      - name: Require production signing secrets
+        shell: powershell
+        run: |
+          if (-not $env:HABITAT_CODESIGN_PFX_BASE64 -or -not $env:HABITAT_CODESIGN_PASSWORD) {
+            throw 'Production signing requires HABITAT_CODESIGN_PFX_BASE64 and HABITAT_CODESIGN_PASSWORD secrets'
+          }
+      - name: Sign installer and console
+        shell: powershell
+        run: |
+          $pfx = Join-Path $env:RUNNER_TEMP 'HabitatCodesign.pfx'
+          try {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:HABITAT_CODESIGN_PFX_BASE64))
+            & tools/win/sign-release.ps1 -DistDir dist\win -PfxPath $pfx
+            if ($LASTEXITCODE -ne 0) { throw 'Authenticode signing failed' }
+            & tools/win/verify-signing.ps1 -DistDir dist\win -RequireTrusted
+            if ($LASTEXITCODE -ne 0) { throw 'Trusted signing verification failed' }
+            node tools/verify-win-release.mjs
+          } finally {
+            Remove-Item -LiteralPath $pfx -Force -ErrorAction SilentlyContinue
+          }
+      - name: Upload signed installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: habitat-windows-installer-signed
+          path: dist/win
+          if-no-files-found: error
+      - name: Publish signed release
+        shell: powershell
+        run: |
+          $tag = 'v' + '${{ inputs.version }}'
+          gh release create $tag `
+            'dist\win\tools\win\HabitatSetup.exe' `
+            'dist\win\tools\win\HabitatConsole.exe' `
+            'dist\win\SHA256SUMS.txt' `
+            --title "Habitat $tag" `
+            --notes "Standalone Windows installer and console. Authenticode signature and RFC3161 timestamp verified. Runtime is pinned by signed lock/SBOM."
