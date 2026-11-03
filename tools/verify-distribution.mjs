@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'dist', 'package', 'Fishbowl');
 for (const required of [
-  'agent/run-continuous.mjs', 'clients/mcpfabric-token.mjs', 'package.json', 'package-lock.json',
+  'agent/run-continuous.mjs', 'clients/mcpfabric-token.mjs', 'agent/verify-context-handoff.mjs', 'package.json', 'package-lock.json',
   'tools/install-user.ps1', 'tools/install.mjs', 'tools/wsl-install.sh', 'tools/verify-install.sh',
   'tools/build-runtime.mjs', 'tools/build-win-exe.mjs', 'tools/win/setup.ps1', 'tools/win/HabitatSetup.cs', 'tools/win/HabitatConsole.cs',
   'tools/verify-win-release.mjs', 'tools/instance-supervisor.mjs', 'tools/verify-instance.mjs', 'tools/verify-settings-live.mjs', 'tools/win/verify-installed-instance.ps1',

@@ -25,6 +25,16 @@ try {
   assert.equal(qq.context().episode, null);
   assert.equal(bili.context().episode.goal, '在 MC 世界 X 生存并直播');
 
+  store.remember('console private social', { scope: 'residence:system', isPrivate: true });
+  episode.handoffTo('qq.group.A', { by: 'owner', summary: '继续共同任务' });
+  episode.addPendingWrite('demo.write', { args: { token: 'secret-pending-data' } });
+  const qqContext = qq.context();
+  assert.equal(qqContext.episode.goal, '在 MC 世界 X 生存并直播');
+  assert.equal(qqContext.episode.handoff.toResidenceId, 'qq.group.A');
+  assert.equal(qqContext.episode.pendingWriteCounts.pending, 1);
+  assert.equal(JSON.stringify(qqContext).includes('secret-pending-data'), false, '任务摘要不得泄漏 pending 参数');
+  assert.equal(qq.recall('console private').length, 0, '交接任务不得带入控制台私有社交记忆');
+
   assert.throws(() => mc.remember('core unauthorized', { scope: 'core' }), /core_write_requires_owner/);
   mc.remember('core approved', { scope: 'core', approvedBy: 'owner' });
   episode.pause();

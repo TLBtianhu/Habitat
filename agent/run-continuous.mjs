@@ -295,6 +295,8 @@ async function tick() {
       ...bilibiliObs.new.map((e) => e.id),
       ...qqObs.new.map((e) => e.id),
     ];
+    const activeResidenceId = currentResidence?.residenceId
+      || (conversation.new.length ? 'system' : (mc.available ? 'mc.world.current' : (currentEpisode.handoff?.toResidenceId || 'system')));
     for (const m of conversation.new) {
       memory.remember(`控制台 ${m.from}: ${m.text}`, { scope: 'residence:system', mode: 'persistent', tags: ['system.chat'], importance: m.from === 'owner' ? 1 : 0.7 });
     }
@@ -306,9 +308,15 @@ async function tick() {
       });
     }
     if (!conversation.new.length && !mc.available && !bilibiliObs.new.length && !qqObs.new.length) return;
+    if (currentResidence?.channel === 'qq' && currentResidence.trust === 'owner') {
+      currentEpisode.handoffTo(currentResidence.residenceId, {
+        by: 'owner',
+        summary: currentResidence.text,
+      });
+    }
     currentEpisode.checkpointState({
       phase: mc.available ? 'PLAY' : 'DEGRADED',
-      activeResidence: currentResidence?.residenceId || 'system',
+      activeResidence: activeResidenceId,
       mcAvailable: mc.available,
       bilibiliAvailable: bilibiliObs.available,
     });
@@ -321,7 +329,7 @@ async function tick() {
       apps: session.obs(),
       voice: { profiles: voiceProfiles },
       memory: contextAssembler.assemble({
-        residenceId: currentResidence?.residenceId || 'system',
+        residenceId: activeResidenceId,
         query: '',
         limit: 5,
       }),

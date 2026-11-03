@@ -1,5 +1,6 @@
 // Episode：跨 residence 的当前任务状态、参与者、checkpoint 与 pending writes。
 import crypto from 'node:crypto';
+import { redactMemoryText } from './residence-memory-store.mjs';
 
 const ACTIVE = new Set(['active', 'paused']);
 const ENDED = new Set(['completed', 'failed', 'cancelled']);
@@ -11,6 +12,9 @@ export class Episode {
     this.phase = data.phase || 'BOOT';
     this.status = data.status || 'active';
     this.visibility = data.visibility || 'participants';
+    this.revision = Number.isSafeInteger(data.revision) && data.revision >= 0 ? data.revision : 0;
+    this.originResidenceId = data.originResidenceId || 'system';
+    this.handoff = data.handoff || null;
     this.createdAt = data.createdAt || Date.now();
     this.updatedAt = data.updatedAt || this.createdAt;
     this.checkpointId = data.checkpointId || null;
@@ -20,11 +24,11 @@ export class Episode {
     if (!['active', 'paused', 'completed', 'failed', 'cancelled'].includes(this.status)) throw new Error('invalid episode status');
   }
 
-  static create({ id = crypto.randomUUID(), goal, participants = [], phase = 'BOOT', visibility = 'participants' }) {
-    return new Episode({ id, goal, participants, phase, visibility });
+  static create({ id = crypto.randomUUID(), goal, participants = [], phase = 'BOOT', visibility = 'participants', originResidenceId = 'system' }) {
+    return new Episode({ id, goal, participants, phase, visibility, originResidenceId });
   }
 
-  touch() { this.updatedAt = Date.now(); }
+  touch() { this.updatedAt = Date.now(); this.revision += 1; }
   isActive() { return this.status === 'active'; }
   isEnded() { return ENDED.has(this.status); }
   canRead(residenceId) { return this.visibility === 'public' || this.participants.includes(residenceId); }
@@ -35,6 +39,23 @@ export class Episode {
       this.participants.push(residenceId);
       this.touch();
     }
+  }
+
+  handoffTo(residenceId, { by = 'owner', summary = '' } = {}) {
+    if (by !== 'owner') throw new Error('episode_handoff_requires_owner');
+    if (this.isEnded()) throw new Error('episode ended');
+    if (!residenceId || typeof residenceId !== 'string') throw new Error('handoff residence required');
+    const fromResidenceId = this.handoff?.toResidenceId || this.originResidenceId;
+    this.addParticipant(residenceId);
+    this.handoff = {
+      fromResidenceId,
+      toResidenceId: residenceId,
+      by,
+      summary: redactMemoryText(summary),
+      at: Date.now(),
+    };
+    this.touch();
+    return this.handoff;
   }
 
   checkpointState(data) {
@@ -91,6 +112,26 @@ export class Episode {
     return write;
   }
 
+  summary() {
+    const counts = {};
+    for (const write of this.pendingWrites) counts[write.status] = (counts[write.status] || 0) + 1;
+    const checkpoint = this.checkpoint ? Object.fromEntries(['phase', 'currentTask', 'activeResidence', 'mcAvailable', 'bilibiliAvailable']
+      .filter((key) => this.checkpoint[key] !== undefined)
+      .map((key) => [key, this.checkpoint[key]])) : null;
+    return {
+      id: this.id,
+      goal: this.goal,
+      phase: this.phase,
+      status: this.status,
+      revision: this.revision,
+      originResidenceId: this.originResidenceId,
+      handoff: this.handoff ? { ...this.handoff } : null,
+      checkpoint,
+      pendingWriteCounts: counts,
+      updatedAt: this.updatedAt,
+    };
+  }
+
   snapshot() {
     return {
       id: this.id,
@@ -99,6 +140,9 @@ export class Episode {
       phase: this.phase,
       status: this.status,
       visibility: this.visibility,
+      revision: this.revision,
+      originResidenceId: this.originResidenceId,
+      handoff: this.handoff ? { ...this.handoff } : null,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       checkpointId: this.checkpointId,

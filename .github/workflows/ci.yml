@@ -32,6 +32,7 @@ jobs:
         run: |
           node agent/verify-episode.mjs
           node agent/verify-memory-slice.mjs
+          node agent/verify-context-handoff.mjs
           node agent/verify-residence-policy.mjs
           node agent/verify-residence-memory-store.mjs
           node agent/verify-after-action.mjs

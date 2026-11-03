@@ -80,7 +80,7 @@ export class MemorySlice {
     return {
       core: this._items('core', query).slice(-limit).map((item) => item.fact),
       episode: this.episode?.canRead(this.residenceId) ? {
-        ...this.episode.snapshot(),
+        ...this.episode.summary(),
         memory: this._items(`episode:${this.episode.id}`, query).slice(-limit).map((item) => item.fact),
       } : null,
       residence: this._items(`residence:${this.residenceId}`, query).slice(-limit).map((item) => item.fact),
