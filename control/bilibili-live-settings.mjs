@@ -11,27 +11,33 @@ export class BilibiliLiveSettings {
   get() {
     const config = readLiveConfig(this.file);
     const output = this.scenePreview.status().bilibili || { state: 'stopped', verifiedAt: null, lastError: null };
+    const verification = this.scenePreview.status().verification || { state: 'stopped', verified: false, lastCheckedAt: null, lastVerifiedAt: null, lastError: null };
     const configured = Boolean(config.rtmpUrl && config.streamKey);
     const state = !configured ? 'unconfigured'
-      : output.state === 'failed' || output.state === 'degraded' ? 'degraded'
-        : output.state === 'starting' ? 'starting'
-          : output.state === 'running' ? 'applied'
-            : output.state === 'stopped' ? 'stopped' : 'configured';
+      : output.state === 'failed' || output.state === 'degraded' || verification.state === 'degraded' ? 'degraded'
+        : output.state === 'reconnecting' ? 'reconnecting'
+        : verification.state === 'stale' ? 'stale'
+          : verification.state === 'checking' ? 'checking'
+            : verification.verified ? 'verified'
+              : output.state === 'starting' ? 'starting'
+                : output.state === 'running' ? 'applied'
+                  : output.state === 'stopped' ? 'stopped' : 'configured';
     return {
       ...publicLiveConfig(config),
       configured,
       applied: output.state === 'running',
-      verified: Boolean(output.verifiedAt),
+      verified: Boolean(verification.verified),
       state,
-      lastCheckedAt: fs.existsSync(this.file) ? fs.statSync(this.file).mtimeMs : null,
-      lastVerifiedAt: output.verifiedAt || null,
-      lastError: output.lastError || null,
+      lastCheckedAt: verification.lastCheckedAt || (fs.existsSync(this.file) ? fs.statSync(this.file).mtimeMs : null),
+      lastVerifiedAt: verification.lastVerifiedAt || output.verifiedAt || null,
+      lastError: verification.lastError || output.lastError || null,
       output,
+      verification,
     };
   }
 
   save(body) {
-    if (['starting', 'running', 'stopping'].includes(this.scenePreview.status().bilibili?.state)) throw new Error('stop the live output before changing config');
+    if (['starting', 'running', 'stopping', 'reconnecting'].includes(this.scenePreview.status().bilibili?.state)) throw new Error('stop the live output before changing config');
     const current = readLiveConfig(this.file);
     const suppliedKey = String(body.streamKey || '').trim();
     const next = {

@@ -54,9 +54,16 @@ function fakeFactory(config) {
     return child;
   }, stopTimeoutMs: 20 });
 }
+const verifier = {
+  verifiedAt: null,
+  status() { return { state: this.verifiedAt ? 'verified' : 'stopped', verified: Boolean(this.verifiedAt), lastCheckedAt: null, lastVerifiedAt: this.verifiedAt, lastError: null }; },
+  start() { this.started = true; },
+  stop() { this.started = false; },
+  async verifyNow() { return this.status(); },
+};
 const scenePreview = new ScenePreviewService({
   desktopUrl: `http://127.0.0.1:${desktop.address().port}`,
-  agentToken: 'agent-test', ownerToken: 'owner-test', port: 0, bilibiliConfigPath: configFile, bilibiliFactory: fakeFactory,
+  agentToken: 'agent-test', ownerToken: 'owner-test', port: 0, bilibiliConfigPath: configFile, bilibiliFactory: fakeFactory, verifier,
 });
 const settings = new BilibiliLiveSettings({ file: configFile, scenePreview });
 try {
@@ -77,7 +84,7 @@ try {
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(settings.get().applied, true);
   assert.equal(children.length, 2);
-  scenePreview.bilibili.markVerified(12345);
+  verifier.verifiedAt = 12345;
   assert.equal(settings.get().verified, true);
   assert.equal(settings.get().lastVerifiedAt, 12345);
   await scenePreview.stopAll();

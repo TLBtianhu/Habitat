@@ -3,16 +3,23 @@ import { spawn } from 'node:child_process';
 import { buildBilibiliTarget } from '../bilibili-live-config.mjs';
 
 export class BilibiliRtmpOutput {
-  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000 }) {
+  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 2000, audio = 'silent' }) {
     if (!target) throw new Error('Bilibili target required');
     if (/^rtmps?:\/\//.test(target) && !streamKey) throw new Error('Bilibili streamKey required');
     this.target = buildBilibiliTarget(target, streamKey);
+    this.secret = streamKey;
     this.ffmpeg = ffmpeg;
     this.fps = fps;
     this.bitrate = bitrate;
     this.spawn = spawnImpl;
     this.stopTimeoutMs = stopTimeoutMs;
+    this.reconnectEnabled = reconnect;
+    this.maxReconnectAttempts = maxReconnectAttempts;
+    this.reconnectBaseMs = reconnectBaseMs;
+    this.audio = audio;
+    this.enabled = false;
     this.child = null;
+    this.reconnectTimer = null;
     this.state = 'stopped';
     this.frames = 0;
     this.lastSeq = null;
@@ -20,6 +27,19 @@ export class BilibiliRtmpOutput {
     this.lastError = null;
     this.exitCode = null;
     this.verifiedAt = null;
+    this.reconnectAttempts = 0;
+    this.retryAt = null;
+    this.stderrTail = '';
+  }
+
+  redact(text) {
+    return String(text || '')
+      .replace(/rtmps?:\/\/\S+/gi, '[rtmp-target]')
+      .replace(/live_\d+_\d+/g, '[stream-id]')
+      .replace(/key=[^&\s]+/gi, 'key=[redacted]')
+      .replace(/trid=[^&\s]+/gi, 'trid=[redacted]')
+      .split(this.secret || '\u0000').join('[redacted]')
+      .slice(0, 600);
   }
 
   status() {
@@ -31,36 +51,71 @@ export class BilibiliRtmpOutput {
       verifiedAt: this.verifiedAt,
       exitCode: this.exitCode,
       lastError: this.lastError,
+      reconnectAttempts: this.reconnectAttempts,
+      retryAt: this.retryAt,
     };
   }
 
   async start() {
     if (this.child) return this.status();
-    this.lastError = null;
+    const retry = this.state === 'reconnecting';
+    this.enabled = true;
+    if (!retry) {
+      this.lastError = null;
+      this.reconnectAttempts = 0;
+    }
     this.exitCode = null;
+    this.retryAt = null;
     this.verifiedAt = null;
+    this.stderrTail = '';
     const args = [
       '-y', '-loglevel', 'error',
       '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(this.fps), '-i', '-',
-      '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
-      '-pix_fmt', 'yuv420p', '-g', String(Math.max(2, Math.round(this.fps * 2))),
-      '-b:v', this.bitrate, '-f', 'flv', this.target,
     ];
+    if (this.audio === 'silent') args.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
+    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-g', String(Math.max(2, Math.round(this.fps * 2))), '-b:v', this.bitrate);
+    if (this.audio === 'silent') args.push('-c:a', 'aac', '-b:a', '128k', '-shortest');
+    args.push('-f', 'flv', this.target);
     this.child = this.spawn(this.ffmpeg, args, { stdio: ['pipe', 'ignore', 'pipe'] });
-    this.child.once('spawn', () => { this.state = 'running'; });
-    this.child.stderr?.on('data', () => {});
+    this.child.once('spawn', () => { if (this.enabled) this.state = 'running'; });
+    this.child.stderr?.on('data', (chunk) => {
+      this.stderrTail = (this.stderrTail + chunk.toString()).slice(-4000);
+    });
     this.child.once('error', (error) => {
-      this.lastError = error.message;
-      this.state = 'failed';
+      this.lastError = this.redact(error.message);
+      if (this.state !== 'stopping') this.state = 'failed';
     });
-    this.child.once('exit', (code) => {
-      this.exitCode = code;
-      if (this.state !== 'stopped') this.state = code === 0 ? 'stopped' : 'failed';
-      if (code !== 0 && !this.lastError) this.lastError = `ffmpeg exited ${code}`;
-      this.child = null;
-    });
+    this.child.once('exit', (code) => this.handleExit(code));
     this.state = 'starting';
     return this.status();
+  }
+
+  handleExit(code) {
+    this.exitCode = code;
+    this.child = null;
+    const intentional = this.state === 'stopping' || this.state === 'stopped';
+    if (intentional) {
+      this.state = 'stopped';
+      return;
+    }
+    const detail = this.stderrTail.trim().split(/\r?\n/).filter(Boolean).slice(-4).join(' | ');
+    this.lastError = this.redact(`ffmpeg exited ${code}${detail ? `: ${detail}` : ''}`);
+    if (this.enabled && this.reconnectEnabled && this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectAttempts += 1;
+      const delay = Math.min(30000, this.reconnectBaseMs * (2 ** (this.reconnectAttempts - 1)));
+      this.state = 'reconnecting';
+      this.retryAt = Date.now() + delay;
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectTimer = null;
+        this.start().catch((error) => {
+          this.lastError = this.redact(error.message);
+          this.state = 'failed';
+        });
+      }, delay);
+      this.reconnectTimer.unref?.();
+    } else {
+      this.state = 'failed';
+    }
   }
 
   async push(packet) {
@@ -83,6 +138,8 @@ export class BilibiliRtmpOutput {
     this.frames += 1;
     this.lastSeq = packet.seq;
     this.lastPtsMs = packet.ptsMs;
+    this.reconnectAttempts = 0;
+    this.lastError = null;
   }
 
   markVerified(at = Date.now()) {
@@ -91,6 +148,10 @@ export class BilibiliRtmpOutput {
   }
 
   async stop() {
+    this.enabled = false;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.retryAt = null;
     const child = this.child;
     if (!child) {
       this.state = 'stopped';

@@ -57,6 +57,8 @@ jobs:
         run: |
           node stream/verify-scene-recorder.mjs
           node stream/verify-bilibili-live.mjs
+          node stream/verify-playback-verifier.mjs
+          node stream/verify-rtmp-reconnect.mjs
           node control/verify-scene-preview.mjs
           node control/verify-bilibili-settings.mjs
       - name: Control and recovery tests

@@ -4,13 +4,18 @@ import { CaptureClient } from './capture-client.mjs';
 import { ConsolePreviewOutput } from './outputs/console-preview.mjs';
 import { BilibiliRtmpOutput } from './outputs/bilibili-rtmp.mjs';
 import { readLiveConfig, validateLiveConfig, buildBilibiliTarget } from './bilibili-live-config.mjs';
+import { PlaybackVerifier } from './playback-verifier.mjs';
 
 export class ScenePreviewService {
-  constructor({ desktopUrl, agentToken, ownerToken, fps = 5, host = '127.0.0.1', port = 9281, bilibiliConfigPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', bilibiliFactory = null }) {
+  constructor({ desktopUrl, agentToken, ownerToken, fps = 5, host = '127.0.0.1', port = 9281, bilibiliConfigPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', bilibiliFactory = null, verifier = null }) {
     this.preview = new ConsolePreviewOutput({ token: ownerToken, host, port });
     this.bilibiliConfigPath = bilibiliConfigPath;
     this.bilibiliFactory = bilibiliFactory;
     this.bilibili = null;
+    this.verifier = verifier || new PlaybackVerifier({
+      configPath: bilibiliConfigPath,
+      outputStatus: () => this.bilibili?.status() || { state: 'stopped' },
+    });
     this.recorder = new SceneRecorder({
       capture: new CaptureClient({ desktopUrl, token: agentToken, fps }),
       outputs: { console: this.preview },
@@ -23,6 +28,7 @@ export class ScenePreviewService {
       ...this.recorder.status(),
       preview: this.preview.status(),
       bilibili: this.bilibili?.status() || { state: 'stopped', verifiedAt: null, lastError: null },
+      verification: this.verifier.status(),
     };
   }
 
@@ -40,7 +46,10 @@ export class ScenePreviewService {
   }
 
   async startBilibili() {
-    if (this.bilibili?.status().state === 'running') return this.status();
+    if (this.bilibili?.status().state === 'running') {
+      this.verifier.start();
+      return this.status();
+    }
     const config = validateLiveConfig(readLiveConfig(this.bilibiliConfigPath));
     if (!config.rtmpUrl || !config.streamKey) throw new Error('Bilibili live config incomplete');
     const target = buildBilibiliTarget(config.rtmpUrl, config.streamKey);
@@ -53,10 +62,20 @@ export class ScenePreviewService {
       this.recorder.outputs.set('bilibili', this.bilibili);
     }
     await this.recorder.startOutput('bilibili');
+    this.verifier.start();
     return this.status();
   }
 
+  verifyBilibili() {
+    return this.verifier.verifyNow();
+  }
+
+  verificationStatus() {
+    return this.verifier.status();
+  }
+
   async stopBilibili() {
+    this.verifier.stop();
     if (this.bilibili) await this.recorder.stopOutput('bilibili');
     if (![...this.recorder.outputs.values()].some((output) => output.status?.().state === 'running')) {
       await this.recorder.stop();
@@ -65,6 +84,7 @@ export class ScenePreviewService {
   }
 
   async stopAll() {
+    this.verifier.stop();
     return this.recorder.stop();
   }
 }

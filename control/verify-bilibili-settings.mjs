@@ -68,9 +68,16 @@ try {
   assert.equal(preserved.body.configured, true);
   assert.equal(JSON.parse(fs.readFileSync(configFile, 'utf8')).streamKey, '?streamname=secret-key');
   assert.equal((await api('/bilibili/live/start', { method: 'POST' })).status, 403);
+  assert.equal((await api('/bilibili/live/verify', { method: 'POST' })).status, 403);
+  const verify = await api('/bilibili/live/verify', { method: 'POST', owner: true });
+  assert.equal(verify.status, 200);
+  assert.equal(verify.body.state, 'stopped');
+  assert.equal(verify.body.verified, false);
+  assert.equal((await api('/bilibili/live/verification/status')).status, 403);
+  assert.equal((await api('/bilibili/live/verification/status', { owner: true })).body.state, 'stopped');
   assert.equal((await api('/bilibili/live/stop', { method: 'POST', owner: true })).body.bilibili.state, 'stopped');
   const html = await (await fetch(`http://127.0.0.1:${port}/console.html`)).text();
-  assert.ok(html.includes('bili-url') && html.includes('bili-key') && html.includes('saveBilibiliLive') && html.includes('bilibiliLiveAction'));
+  assert.ok(html.includes('bili-url') && html.includes('bili-key') && html.includes('saveBilibiliLive') && html.includes('bilibiliLiveAction') && html.includes('bili-verify') && html.includes('bilibiliVerifyAction'));
   assert.ok(!html.includes('secret-key'));
   console.log('ok: B站 RTMP owner 配置、脱敏状态、非法地址拒绝与 Live 配置页');
 } finally {
