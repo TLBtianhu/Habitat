@@ -24,7 +24,7 @@ Compositor CaptureSession
 
 ## 输出职责
 
-- `BilibiliRtmpOutput`：使用 FFmpeg 编码，只有显式启动才连接目标；没有公网自动启动。RTMP 地址和 streamKey 由 owner 在控制台配置，streamKey 只写不回显；输入可为裸 streamname、`streamname=...`、`?streamname=...` 或完整 RTMP URL，统一生成 `.../?streamname=...`。`applied` 表示输出运行，`verified` 只能来自独立播放验证，不能由配置存在或 FFmpeg 启动推断。意外退出使用有限退避重连，owner 停止后不得自动重开；静音 AAC 只是传输兼容音轨，不代表大肥鱼语音。
+- `BilibiliRtmpOutput`：使用 FFmpeg 编码，只有显式启动才连接目标；没有公网自动启动。RTMP 地址和 streamKey 由 owner 在控制台配置，streamKey 只写不回显；输入可为裸 streamname、`streamname=...`、`?streamname=...` 或完整 RTMP URL，统一生成 `.../?streamname=...`。`applied` 表示输出运行，`verified` 只能来自独立播放验证，不能由配置存在或 FFmpeg 启动推断。意外退出使用有限退避重连，owner 停止后不得自动重开；默认无音轨，静音 AAC 仅作可选传输诊断，不代表大肥鱼语音。
 - `ConsolePreviewOutput`：owner-only HTTP 预览，使用同一份帧包，不重新渲染，不是公开直播服务。控制台 Live 页由 `ScenePreviewService` 提供 owner 主动启停，未启动时保留原 HLS 回退；图像通过控制面同源 `/scene/frame` 返回，避免跨端口预检和 URL 中的 token。
 - 输出可以分别 `start/push/stop/status`，一个输出失败不会阻断其他输出；故障移除后录制器可以恢复 `running`。
 - `starting`、运行、失败、停止中、已停止分开。FFmpeg 未确认退出时不得报告 stopped。
@@ -34,7 +34,8 @@ Compositor CaptureSession
 `PlaybackVerifier` 与推流输出解耦：读取公开房间信息和播放地址，使用独立 FFmpeg 解码一帧。推流运行期间定时验证，控制台“刷新状态”调用同一个 `verifyNow()`，进行中的检查复用，不重复创建解码进程。
 
 - `lastCheckedAt` 是最近检查时间，`lastVerifiedAt` 是最近成功证据时间。
-- `verified` 只在当前输出运行且最近成功证据未过期时成立；过期为 `stale`，失败为 `degraded`，输出停止为 `stopped`。
+- `verified` 只在当前输出运行且最近成功证据未过期时成立；过期为 `stale`，连续失败为 `degraded`，输出停止为 `stopped`。
+- 最近证据有效期内的瞬时播放失败保留最近证据并显示错误；连续失败后退避，手动 `verifyNow()` 仍可立即检查。
 - 不使用旧的 `liveStatus`、旧播放地址或 FFmpeg 进程存活证明当前直播成功。
 - `stream/verify-playback-live.mjs` 只读验证真实直播，不启动第二个推流输出。
 

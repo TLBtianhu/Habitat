@@ -78,7 +78,7 @@ export class PlaybackVerifier {
     return data.data;
   }
 
-  async perform() {
+  async perform(force = true) {
     const generation = this.generation;
     const output = this.outputStatus() || { state: 'stopped' };
     if (output.state !== 'running') {
@@ -86,6 +86,7 @@ export class PlaybackVerifier {
       this.playbackDecoded = false;
       return this.status();
     }
+    if (!force && this.consecutiveFailures >= 3 && this.lastCheckedAt && this.now() - this.lastCheckedAt < 60000) return this.status();
     this.state = 'checking';
     this.lastCheckedAt = this.now();
     try {
@@ -108,17 +109,18 @@ export class PlaybackVerifier {
       this.consecutiveFailures = 0;
     } catch (error) {
       if (generation !== this.generation) return this.status();
-      this.state = 'degraded';
       this.lastError = safeError(error);
       this.playbackDecoded = false;
       this.consecutiveFailures += 1;
+      const recentEvidence = this.lastVerifiedAt && this.now() - this.lastVerifiedAt <= this.ttlMs;
+      this.state = recentEvidence && this.consecutiveFailures < 3 ? 'verified' : this.lastVerifiedAt ? 'stale' : 'degraded';
     }
     return this.status();
   }
 
-  verifyNow() {
+  verifyNow(force = true) {
     if (this.inflight) return this.inflight;
-    this.inflight = this.perform().finally(() => { this.inflight = null; });
+    this.inflight = this.perform(force).finally(() => { this.inflight = null; });
     return this.inflight;
   }
 
@@ -128,7 +130,7 @@ export class PlaybackVerifier {
     this.generation += 1;
     this.state = 'idle';
     this.verifyNow().catch(() => {});
-    this.timer = setInterval(() => { this.verifyNow().catch(() => {}); }, this.intervalMs);
+    this.timer = setInterval(() => { this.verifyNow(false).catch(() => {}); }, this.intervalMs);
     this.timer.unref?.();
     return this.status();
   }

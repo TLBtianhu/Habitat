@@ -17,7 +17,7 @@ function spawnImpl(_ffmpeg, args) {
   queueMicrotask(() => child.emit('spawn'));
   return child;
 }
-const output = new BilibiliRtmpOutput({ target: 'rtmp://127.0.0.1/live', streamKey: 'secret-key', spawnImpl, reconnectBaseMs: 10, maxReconnectAttempts: 2 });
+const output = new BilibiliRtmpOutput({ target: 'rtmp://127.0.0.1/live', streamKey: 'secret-key', spawnImpl, reconnectBaseMs: 10, maxReconnectAttempts: 2, audio: 'silent' });
 try {
   await output.start();
   await new Promise((resolve) => setImmediate(resolve));
