@@ -72,7 +72,7 @@ for item in "${ITEMS[@]}" package.json package-lock.json; do
   fi
 done
 
-if [ -f "$APP/package.json" ] && { [ ! -d "$APP/node_modules/ws" ] || [ ! -d "$APP/node_modules/@resvg/resvg-js" ] || [ ! -d "$APP/node_modules/qrcode" ]; }; then
+if [ -f "$APP/package.json" ]; then
   export PATH="$NODE_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   cd "$APP" && "$NODE_HOME/bin/npm" install --omit=dev --no-audit --no-fund
 fi

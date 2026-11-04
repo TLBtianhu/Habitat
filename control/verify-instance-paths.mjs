@@ -30,6 +30,10 @@ try {
   assert.equal(text.includes('/var/lib/habitat'), false);
   assert.equal(text.includes('/etc/habitat'), false);
   assert.equal(text.includes('/home/' + 'tlb3'), false);
+  const installer = fs.readFileSync('tools/wsl-install.sh', 'utf8');
+  const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  assert.ok(packageJson.dependencies.undici, 'undici dependency required');
+  assert.ok(installer.includes('"$NODE_HOME/bin/npm" install'), 'WSL installer must calibrate dependencies from lockfile');
   console.log('ok: 单根路径、越界拒绝、无秘密 EnvironmentFile 与 MC autoStart=0');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
