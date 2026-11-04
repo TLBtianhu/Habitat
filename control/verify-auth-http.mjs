@@ -34,12 +34,14 @@ const webui = http.createServer(async (req, res) => {
   }
   res.writeHead(404); res.end();
 });
-await new Promise((resolve) => webui.listen(16099, '127.0.0.1', resolve));
+const webuiPort = 16000 + Math.floor(Math.random() * 1000);
+const controlPort = 19000 + Math.floor(Math.random() * 1000);
+await new Promise((resolve) => webui.listen(webuiPort, '127.0.0.1', resolve));
 const control = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', import.meta.url))], {
   env: {
     ...process.env,
-    HABITAT_CONTROL_PORT: '19245',
-    HABITAT_NAPCAT_WEBUI_URL: 'http://127.0.0.1:16099/api',
+    HABITAT_CONTROL_PORT: String(controlPort),
+    HABITAT_NAPCAT_WEBUI_URL: `http://127.0.0.1:${webuiPort}/api`,
     HABITAT_NAPCAT_TOKEN_FILE: napcatTokenFile,
     HABITAT_OWNER_TOKEN_FILE: ownerFile,
     HABITAT_AGENT_TOKEN_FILE: agentFile,
@@ -59,11 +61,11 @@ const control = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', i
     HABITAT_PLUGIN_CACHE: path.join(root, 'plugins'),
     HABITAT_RESIDENCE_POLICY: path.join(root, 'policy.json'),
   },
-  stdio: ['ignore', 'ignore', 'ignore'],
+  stdio: ['ignore', 'ignore', 'inherit'],
 });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function api(pathname, { method = 'GET', owner = false } = {}) {
-  const response = await fetch(`http://127.0.0.1:19245${pathname}`, {
+  const response = await fetch(`http://127.0.0.1:${controlPort}${pathname}`, {
     method,
     headers: { 'content-type': 'application/json', ...(owner ? { authorization: 'Bearer owner-test' } : {}) },
     body: method === 'POST' ? '{}' : undefined,
@@ -71,7 +73,7 @@ async function api(pathname, { method = 'GET', owner = false } = {}) {
   return { status: response.status, headers: response.headers, body: await response.json().catch(() => null) };
 }
 try {
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 100; i++) {
     try { await api('/status'); break; } catch { await sleep(200); }
   }
   assert.equal((await api('/auth/status')).status, 403);
@@ -91,7 +93,7 @@ try {
   const ready = await api('/auth/status', { owner: true });
   assert.equal(ready.body.state, 'ready');
   assert.equal((await api('/auth/status?provider=other', { owner: true })).status, 400);
-  const page = await fetch('http://127.0.0.1:19245/console.html');
+  const page = await fetch(`http://127.0.0.1:${controlPort}/console.html`);
   const html = await page.text();
   assert.ok(html.includes('data-tab="auth"'));
   assert.ok(html.includes('/auth/refresh'));
