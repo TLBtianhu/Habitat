@@ -12,6 +12,7 @@
   #state { margin-left:auto; font-size:12px; color:#64748b; }
   #main { display:flex; height:calc(100vh - 53px); }
   #live { flex:1; background:#000; display:flex; align-items:center; justify-content:center; position:relative; }
+  #scene-frame { width:100%; height:100%; object-fit:contain; }
   video { width:100%; height:100%; object-fit:contain; }
   #nofeed { position:absolute; color:#475569; font-size:14px; text-align:center; line-height:1.8; }
   #side { width:380px; min-width:380px; background:#111827; border-left:1px solid #243247; padding:14px; overflow:auto; box-sizing:border-box; }
@@ -38,7 +39,7 @@
   <div id="state">连接中…</div>
 </div>
 <div id="main">
-  <div id="live"><video id="v" muted playsinline></video><div id="nofeed">正在检查画面投送…</div></div>
+  <div id="live"><video id="v" muted playsinline></video><img id="scene-frame" hidden alt="统一 SceneRecorder 预览帧" /><div id="nofeed">正在检查画面投送…</div></div>
   <div id="side"></div>
 </div>
 <script>
@@ -63,18 +64,44 @@ const post = (p, body) => api(p, { method: 'POST', body: JSON.stringify(body || 
 
 // ---- Live：只显示真实的投送，没推流就明说 ----
 const v = document.getElementById('v');
+const sceneFrame = document.getElementById('scene-frame');
+let sceneFrameUrl = null;
 let hls = null;
 let liveWanted = false;
 let liveBusy = false;
 function destroyLive() {
   if (hls) { hls.destroy(); hls = null; }
   v.removeAttribute('src'); v.load();
+  v.hidden = false;
+  sceneFrame.hidden = true;
+  sceneFrame.removeAttribute('src');
+  if (sceneFrameUrl) { URL.revokeObjectURL(sceneFrameUrl); sceneFrameUrl = null; }
   nofeed.hidden = false;
 }
 async function refreshLive() {
   if (!liveWanted || liveBusy) return;
   liveBusy = true;
   try {
+    let scene = null;
+    try { scene = await get('/scene/status'); } catch {}
+    if (scene?.preview?.state === 'running') {
+      destroyLive();
+      v.hidden = true;
+      const response = await fetch('/scene/frame', { headers: { authorization: 'Bearer ' + token }, cache: 'no-store' });
+      if (response.status === 202) {
+        sceneFrame.hidden = true;
+        nofeed.textContent = '统一预览尚未产生新帧';
+        return;
+      }
+      if (!response.ok) throw new Error(`preview HTTP ${response.status}`);
+      const blob = await response.blob();
+      if (sceneFrameUrl) URL.revokeObjectURL(sceneFrameUrl);
+      sceneFrameUrl = URL.createObjectURL(blob);
+      sceneFrame.src = sceneFrameUrl;
+      sceneFrame.hidden = false;
+      nofeed.hidden = true;
+      return;
+    }
     const status = await get('/live/status');
     if (!liveWanted) return;
     if (!status.live) {
@@ -125,7 +152,11 @@ async function renderLiveSide() {
       `<div class="muted" style="margin:6px 0 10px">${note}</div>` +
       `<button class="${o.running ? 'ghost' : ''}" onclick="outletAction('${name}','${action}')">${o.running ? '停止' : '启动'}</button></div>`;
   };
-  side.innerHTML = '<div class="card muted">画面由 Desktop 合成；以下只是独立的编码与通信出口。</div>' +
+  const previewRunning = (await get('/scene/status')).preview?.state === 'running';
+  const previewCard = `<div class="card"><div>统一 SceneRecorder 预览：<span class="${previewRunning ? '' : 'muted'}">${previewRunning ? '运行中' : '已停止'}</span></div>` +
+    `<div class="muted" style="margin:6px 0 10px">owner 主动开启；只使用统一帧包，不公开推流。</div>` +
+    `<button class="${previewRunning ? 'ghost' : ''}" onclick="scenePreviewAction('${previewRunning ? 'stop' : 'start'}')">${previewRunning ? '停止统一预览' : '开启统一预览'}</button></div>`;
+  side.innerHTML = previewCard + '<div class="card muted">画面由 Desktop 合成；以下只是独立的编码与通信出口。</div>' +
     card('hls', '本地 HLS', '用于本地预览，不对外公开。') +
     card('rtmp', 'B 站 RTMPS', outlets.rtmp?.configured ? '使用主人保存的推流配置。' : '尚未配置推流地址。');
 }
@@ -139,6 +170,18 @@ window.outletAction = async (name, action) => {
     stateEl.textContent = e.message;
   }
   renderLiveSide().catch(() => {});
+};
+
+window.scenePreviewAction = async (action) => {
+  try {
+    stateEl.textContent = '正在执行…';
+    await post(`/scene/preview/${action}`, {});
+    stateEl.textContent = '已执行';
+    startLive();
+    await renderLiveSide();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
 };
 
 function esc(s) {

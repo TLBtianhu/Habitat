@@ -14,6 +14,7 @@ import { PluginInstaller } from './plugin-installer.mjs';
 import { RecoveryManager } from './recovery.mjs';
 import { InstanceSettings } from './instance-settings.mjs';
 import { AuthFlowController } from './auth-flow.mjs';
+import { ScenePreviewService } from '../stream/scene-preview-service.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STAGE_ORIGIN = process.env.HABITAT_STAGE || 'http://127.0.0.1:9230';
@@ -101,6 +102,12 @@ const pluginInstaller = new PluginInstaller({
 const recovery = new RecoveryManager();
 const instanceSettings = new InstanceSettings();
 const authFlow = new AuthFlowController({ baseUrl: process.env.HABITAT_NAPCAT_WEBUI_URL || 'http://127.0.0.1:6099/api' });
+const scenePreview = new ScenePreviewService({
+  desktopUrl: process.env.FB_DESKTOP_URL || 'http://127.0.0.1:9260',
+  agentToken: AGENT_TOKEN,
+  ownerToken: TOKEN,
+  port: Number(process.env.HABITAT_SCENE_PREVIEW_PORT || 9281),
+});
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 function json(res, code, body) {
@@ -216,6 +223,28 @@ http.createServer(async (req, res) => {
       res.end(data);
     });
     return;
+  }
+  if (url.pathname === '/scene/frame' && req.method === 'GET') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    const packet = scenePreview.preview.latest;
+    if (!packet) { res.writeHead(202, { 'cache-control': 'no-store' }); res.end(); return; }
+    res.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store', 'x-frame-seq': String(packet.seq), 'x-frame-at': String(packet.capturedAt), 'x-frame-pts': String(packet.ptsMs) });
+    res.end(packet.data);
+    return;
+  }
+  if (url.pathname === '/scene/status' && req.method === 'GET') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    return json(res, 200, scenePreview.status());
+  }
+  if (url.pathname === '/scene/preview/start' && req.method === 'POST') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, await scenePreview.start()); }
+    catch (e) { return json(res, 502, { error: e.message }); }
+  }
+  if (url.pathname === '/scene/preview/stop' && req.method === 'POST') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, await scenePreview.stop()); }
+    catch (e) { return json(res, 502, { error: e.message }); }
   }
   if (url.pathname === '/auth/status' && req.method === 'GET') {
     if (!isOwner(req)) return json(res, 403, { error: 'owner required' });

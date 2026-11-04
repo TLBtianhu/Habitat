@@ -54,7 +54,9 @@ jobs:
           node adapters/mc-launcher/verify-provider.mjs
           node adapters/mc-launcher/verify-runtime-package.mjs
       - name: Stream runtime tests
-        run: node stream/verify-scene-recorder.mjs
+        run: |
+          node stream/verify-scene-recorder.mjs
+          node control/verify-scene-preview.mjs
       - name: Control and recovery tests
         run: |
           node control/verify-cross-channel.mjs
