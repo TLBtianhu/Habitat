@@ -226,6 +226,20 @@ http.createServer(async (req, res) => {
     });
     return;
   }
+  if (url.pathname === '/bilibili/live/network' && req.method === 'GET') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    return json(res, 200, scenePreview.network.status());
+  }
+  if (url.pathname === '/bilibili/live/network' && req.method === 'POST') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, scenePreview.saveNetwork(await readJson(req))); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
+  if (url.pathname === '/bilibili/live/network/check' && req.method === 'POST') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, await scenePreview.checkNetwork()); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
   if (url.pathname === '/bilibili/live/verify' && req.method === 'POST') {
     if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
     try { return json(res, 200, await scenePreview.verifyBilibili()); }

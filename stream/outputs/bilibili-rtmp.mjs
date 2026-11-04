@@ -1,9 +1,10 @@
 // B 站输出：只消费统一 FramePacket；FFmpeg 编码与网络输出，不持有桌面渲染。
 import { spawn } from 'node:child_process';
 import { buildBilibiliTarget } from '../bilibili-live-config.mjs';
+import { RtmpNetworkPolicy } from '../network-policy.mjs';
 
 export class BilibiliRtmpOutput {
-  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none' }) {
+  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none', network = null }) {
     if (!target) throw new Error('Bilibili target required');
     if (/^rtmps?:\/\//.test(target) && !streamKey) throw new Error('Bilibili streamKey required');
     this.target = buildBilibiliTarget(target, streamKey);
@@ -30,6 +31,8 @@ export class BilibiliRtmpOutput {
     this.reconnectAttempts = 0;
     this.retryAt = null;
     this.stderrTail = '';
+    this.network = network || new RtmpNetworkPolicy();
+    this.transportClose = null;
   }
 
   redact(text) {
@@ -68,6 +71,16 @@ export class BilibiliRtmpOutput {
     this.retryAt = null;
     this.verifiedAt = null;
     this.stderrTail = '';
+    let route;
+    try {
+      route = await this.network.route(this.target);
+      this.transportClose = route.close;
+    } catch (error) {
+      this.enabled = false;
+      this.state = 'failed';
+      this.lastError = this.redact(error.message);
+      throw error;
+    }
     const args = [
       '-y', '-loglevel', 'error',
       '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(this.fps), '-i', '-',
@@ -75,8 +88,19 @@ export class BilibiliRtmpOutput {
     if (this.audio === 'silent') args.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     args.push('-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-g', String(Math.max(2, Math.round(this.fps * 2))), '-b:v', this.bitrate);
     if (this.audio === 'silent') args.push('-c:a', 'aac', '-b:a', '128k', '-shortest');
-    args.push('-f', 'flv', this.target);
-    this.child = this.spawn(this.ffmpeg, args, { stdio: ['pipe', 'ignore', 'pipe'] });
+    if (route.tcUrl) args.push('-rtmp_tcurl', route.tcUrl);
+    args.push('-f', 'flv', route.target);
+    let child;
+    try {
+      child = this.spawn(this.ffmpeg, args, { stdio: ['pipe', 'ignore', 'pipe'], env: route.env });
+    } catch (error) {
+      this.enabled = false;
+      this.state = 'failed';
+      this.lastError = this.redact(error.message);
+      await this.closeTransport();
+      throw error;
+    }
+    this.child = child;
     this.child.once('spawn', () => { if (this.enabled) this.state = 'running'; });
     this.child.stderr?.on('data', (chunk) => {
       this.stderrTail = (this.stderrTail + chunk.toString()).slice(-4000);
@@ -90,9 +114,16 @@ export class BilibiliRtmpOutput {
     return this.status();
   }
 
+  async closeTransport() {
+    const close = this.transportClose;
+    this.transportClose = null;
+    if (close) await close();
+  }
+
   handleExit(code) {
     this.exitCode = code;
     this.child = null;
+    void this.closeTransport().catch(() => {});
     const intentional = this.state === 'stopping' || this.state === 'stopped';
     if (intentional) {
       this.state = 'stopped';
@@ -155,6 +186,7 @@ export class BilibiliRtmpOutput {
     const child = this.child;
     if (!child) {
       this.state = 'stopped';
+      await this.closeTransport();
       return this.status();
     }
     this.state = 'stopping';
@@ -166,20 +198,24 @@ export class BilibiliRtmpOutput {
     };
     if (await wait(this.stopTimeoutMs)) {
       this.state = 'stopped';
+      await this.closeTransport();
       return this.status();
     }
     try { child.kill('SIGTERM'); } catch {}
     if (await wait(this.stopTimeoutMs)) {
       this.state = 'stopped';
+      await this.closeTransport();
       return this.status();
     }
     try { child.kill('SIGKILL'); } catch {}
     if (await wait(250)) {
       this.state = 'stopped';
+      await this.closeTransport();
       return this.status();
     }
     this.state = 'degraded';
     this.lastError = 'stop_timeout';
+    await this.closeTransport();
     throw new Error('stop_timeout');
   }
 }

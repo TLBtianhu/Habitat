@@ -63,10 +63,33 @@ try {
   assert.equal(saved.body.configured, true);
   assert.equal(saved.body.streamKeySet, true);
   assert.equal(saved.body.verified, false);
+  assert.equal(saved.body.network.mode, 'direct');
+  assert.equal(saved.body.credential.configured, true);
+  assert.equal(saved.body.credential.canStart, true);
+  assert.equal(saved.body.credential.requiresRefresh, false);
   assert.ok(!JSON.stringify(saved.body).includes('secret-key'));
   const preserved = await api('/bilibili/live/settings', { method: 'POST', owner: true, body: { rtmpUrl: 'rtmp://127.0.0.1/other', streamKey: '' } });
   assert.equal(preserved.body.configured, true);
   assert.equal(JSON.parse(fs.readFileSync(configFile, 'utf8')).streamKey, '?streamname=secret-key');
+  assert.equal((await api('/bilibili/live/network')).status, 403);
+  assert.equal((await api('/bilibili/live/network', { method: 'POST' })).status, 403);
+  const network = await api('/bilibili/live/network', { method: 'POST', owner: true, body: { mode: 'direct', apiProxyMode: 'direct' } });
+  assert.equal(network.body.mode, 'direct');
+  assert.equal(network.body.apiProxyMode, 'direct');
+  assert.equal(network.body.supported, true);
+  assert.equal(network.body.lastResult, 'unknown');
+  assert.ok(!JSON.stringify(network.body).includes('password'));
+  assert.equal((await api('/bilibili/live/network/check', { method: 'POST' })).status, 403);
+  const checked = await api('/bilibili/live/network/check', { method: 'POST', owner: true });
+  assert.equal(checked.status, 200);
+  assert.ok(['reachable', 'degraded'].includes(checked.body.lastResult));
+  assert.ok(checked.body.lastCheckedAt);
+  const health = await api('/bilibili/live/settings', { owner: true });
+  if (checked.body.lastResult === 'degraded') {
+    assert.equal(health.body.credential.canStart, false);
+    assert.equal(health.body.credential.requiresRefresh, true);
+  }
+  await api('/bilibili/live/network', { method: 'POST', owner: true, body: { mode: 'direct', apiProxyMode: 'direct' } });
   assert.equal((await api('/bilibili/live/start', { method: 'POST' })).status, 403);
   assert.equal((await api('/bilibili/live/verify', { method: 'POST' })).status, 403);
   const verify = await api('/bilibili/live/verify', { method: 'POST', owner: true });

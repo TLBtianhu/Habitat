@@ -171,13 +171,26 @@ async function renderLiveSide() {
     `<div class="muted" style="margin:6px 0 8px">streamKey 只写不回显；保存配置不会自动开播。</div>` +
     `<input id="bili-url" placeholder="RTMP 推流地址" value="${esc(live.rtmpUrl)}" style="width:100%;margin-bottom:6px" />` +
     `<input id="bili-key" type="password" autocomplete="off" placeholder="${live.streamKeySet ? '已保存 streamKey（可替换）' : 'streamKey（不会回显）'}" style="width:100%;margin-bottom:8px" />` +
-    `<div class="row"><button id="bili-save">保存配置</button><button id="bili-toggle" class="${live.applied ? 'ghost' : ''}" ${live.configured || live.applied ? '' : 'disabled'}>${live.applied ? '停止推流' : '开始推流'}</button><button id="bili-verify" class="ghost" ${live.configured || live.applied ? '' : 'disabled'}>刷新状态</button></div>` +
+    `<div class="row"><button id="bili-save">保存配置</button><button id="bili-toggle" class="${live.applied ? 'ghost' : ''}" ${(live.configured && live.credential?.canStart !== false) || live.applied ? '' : 'disabled'}>${live.applied ? '停止推流' : '开始推流'}</button><button id="bili-verify" class="ghost" ${live.configured || live.applied ? '' : 'disabled'}>刷新状态</button></div>` +
     `<div class="muted" style="margin-top:8px">最近检查：${live.lastCheckedAt ? new Date(live.lastCheckedAt).toLocaleString() : '尚未检查'}<br>最近播放验证：${live.lastVerifiedAt ? new Date(live.lastVerifiedAt).toLocaleString() : '尚未验证'}${live.lastError ? ' · ' + esc(live.lastError) : ''}</div></div>`;
-  side.innerHTML = previewCard + biliCard + '<div class="card muted">画面由 Desktop 合成；以下只是独立的编码与通信出口。</div>' +
+  const network = live.network || { mode: 'direct', apiProxyMode: 'system', lastResult: 'unknown', lastCheckedAt: null, lastError: null };
+  const networkCard = `<div class="card"><div>推流网络：<span class="muted">${network.supported === false ? '未启用系统代理' : network.lastResult === 'reachable' ? 'TCP/SOCKS5 可达' : network.lastResult === 'degraded' ? '预检失败' : '未预检'}</span></div>` +
+    `<div class="muted" style="margin:6px 0 8px">默认推流直连，API 可走系统代理；预检不代表直播成功。</div>` +
+    `<select id="net-mode" style="width:100%;margin-bottom:6px"><option value="direct" ${network.mode === 'direct' ? 'selected' : ''}>推流直连（推荐）</option><option value="system" ${network.mode === 'system' ? 'selected' : ''}>跟随系统代理（高级）</option><option value="socks5" ${network.mode === 'socks5' ? 'selected' : ''}>SOCKS5 代理</option></select>` +
+    `<select id="net-api-mode" style="width:100%;margin-bottom:6px"><option value="system" ${network.apiProxyMode === 'system' ? 'selected' : ''}>API 跟随系统代理</option><option value="direct" ${network.apiProxyMode === 'direct' ? 'selected' : ''}>API 直连</option></select>` +
+    `<div id="net-proxy-fields" style="display:${network.mode === 'socks5' ? 'block' : 'none'}"><input id="net-proxy-host" value="${esc(network.proxyHost || '127.0.0.1')}" placeholder="SOCKS5 地址" style="width:100%;margin-bottom:6px" /><input id="net-proxy-port" type="number" min="1" max="65535" value="${network.proxyPort || 7897}" placeholder="端口" style="width:100%;margin-bottom:6px" /></div>` +
+    `<div class="row"><button id="net-save">保存网络</button><button id="net-check" class="ghost">检查网络</button></div>` +
+    `<div class="muted" style="margin-top:8px">最近预检：${network.lastCheckedAt ? new Date(network.lastCheckedAt).toLocaleString() : '尚未预检'}${network.lastError ? ' · ' + esc(network.lastError) : ''}</div></div>`;
+  side.innerHTML = previewCard + biliCard + networkCard + '<div class="card muted">画面由 Desktop 合成；以下只是独立的编码与通信出口。</div>' +
     card('hls', '本地 HLS', '用于本地预览，不对外公开。');
   document.getElementById('bili-save').onclick = saveBilibiliLive;
   document.getElementById('bili-toggle').onclick = () => bilibiliLiveAction(live.applied ? 'stop' : 'start');
   document.getElementById('bili-verify').onclick = bilibiliVerifyAction;
+  document.getElementById('net-save').onclick = saveBilibiliNetwork;
+  document.getElementById('net-check').onclick = checkBilibiliNetwork;
+  document.getElementById('net-mode').onchange = () => {
+    document.getElementById('net-proxy-fields').style.display = document.getElementById('net-mode').value === 'socks5' ? 'block' : 'none';
+  };
 }
 window.outletAction = async (name, action) => {
   if (name === 'rtmp' && action === 'start' && !confirm('确认按主人配置向 B 站公开推流？')) return;
@@ -233,6 +246,35 @@ window.bilibiliVerifyAction = async () => {
     stateEl.textContent = '正在验证真实播放…';
     const result = await post('/bilibili/live/verify', {});
     stateEl.textContent = result.state === 'verified' ? '播放验证通过' : result.state === 'stopped' ? '推流已停止' : '播放验证未通过';
+    await renderLiveSide();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
+};
+
+window.saveBilibiliNetwork = async () => {
+  try {
+    stateEl.textContent = '正在保存网络策略…';
+    await post('/bilibili/live/network', {
+      mode: document.getElementById('net-mode').value,
+      apiProxyMode: document.getElementById('net-api-mode').value,
+      allowSystemProxyForRtmp: document.getElementById('net-mode').value === 'system',
+      proxy: {
+        host: document.getElementById('net-proxy-host').value.trim(),
+        port: Number(document.getElementById('net-proxy-port').value),
+      },
+    });
+    stateEl.textContent = '网络策略已保存';
+    await renderLiveSide();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
+};
+window.checkBilibiliNetwork = async () => {
+  try {
+    stateEl.textContent = '正在进行网络预检…';
+    const result = await post('/bilibili/live/network/check', {});
+    stateEl.textContent = result.lastResult === 'reachable' ? '网络预检通过（不代表直播成功）' : '网络预检失败';
     await renderLiveSide();
   } catch (e) {
     stateEl.textContent = e.message;

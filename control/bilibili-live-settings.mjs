@@ -12,27 +12,42 @@ export class BilibiliLiveSettings {
     const config = readLiveConfig(this.file);
     const output = this.scenePreview.status().bilibili || { state: 'stopped', verifiedAt: null, lastError: null };
     const verification = this.scenePreview.status().verification || { state: 'stopped', verified: false, lastCheckedAt: null, lastVerifiedAt: null, lastError: null };
+    const network = this.scenePreview.status().network || { mode: 'direct', supported: true, lastResult: 'unknown', lastCheckedAt: null, lastError: null };
     const configured = Boolean(config.rtmpUrl && config.streamKey);
     const state = !configured ? 'unconfigured'
-      : output.state === 'failed' || output.state === 'degraded' || verification.state === 'degraded' ? 'degraded'
+      : verification.verified ? 'verified'
         : output.state === 'reconnecting' ? 'reconnecting'
-        : verification.state === 'stale' ? 'stale'
-          : verification.state === 'checking' ? 'checking'
-            : verification.verified ? 'verified'
-              : output.state === 'starting' ? 'starting'
-                : output.state === 'running' ? 'applied'
-                  : output.state === 'stopped' ? 'stopped' : 'configured';
+          : output.state === 'failed' || output.state === 'degraded' || verification.state === 'degraded' || network.lastResult === 'degraded' ? 'degraded'
+            : verification.state === 'stale' ? 'stale'
+              : verification.state === 'checking' ? 'checking'
+                : output.state === 'starting' ? 'starting'
+                  : output.state === 'running' ? 'applied'
+                    : output.state === 'stopped' ? 'stopped' : 'configured';
     return {
       ...publicLiveConfig(config),
       configured,
       applied: output.state === 'running',
       verified: Boolean(verification.verified),
       state,
-      lastCheckedAt: verification.lastCheckedAt || (fs.existsSync(this.file) ? fs.statSync(this.file).mtimeMs : null),
+      lastCheckedAt: verification.lastCheckedAt || network.lastCheckedAt || (fs.existsSync(this.file) ? fs.statSync(this.file).mtimeMs : null),
       lastVerifiedAt: verification.lastVerifiedAt || output.verifiedAt || null,
-      lastError: verification.lastError || output.lastError || null,
+      lastError: verification.lastError || output.lastError || network.lastError || null,
       output,
       verification,
+      network,
+      credential: {
+        configured,
+        state,
+        canStart: configured && network.supported && network.lastResult !== 'degraded' && !['starting', 'running', 'stopping', 'reconnecting'].includes(output.state),
+        requiresRefresh: (!verification.verified && (state === 'degraded' || state === 'stale' || Boolean(verification.lastError || output.lastError || network.lastError))) || network.lastResult === 'degraded' || !network.supported,
+        lastCheckedAt: verification.lastCheckedAt || network.lastCheckedAt || null,
+        lastVerifiedAt: verification.lastVerifiedAt || output.verifiedAt || null,
+        lastError: verification.lastError || output.lastError || network.lastError || null,
+        networkMode: network.mode,
+        networkState: network.lastResult,
+        outputState: output.state,
+        verificationState: verification.state,
+      },
     };
   }
 

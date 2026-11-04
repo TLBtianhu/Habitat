@@ -5,16 +5,19 @@ import { ConsolePreviewOutput } from './outputs/console-preview.mjs';
 import { BilibiliRtmpOutput } from './outputs/bilibili-rtmp.mjs';
 import { readLiveConfig, validateLiveConfig, buildBilibiliTarget } from './bilibili-live-config.mjs';
 import { PlaybackVerifier } from './playback-verifier.mjs';
+import { RtmpNetworkPolicy } from './network-policy.mjs';
 
 export class ScenePreviewService {
-  constructor({ desktopUrl, agentToken, ownerToken, fps = 5, host = '127.0.0.1', port = 9281, bilibiliConfigPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', bilibiliFactory = null, verifier = null }) {
+  constructor({ desktopUrl, agentToken, ownerToken, fps = 5, host = '127.0.0.1', port = 9281, bilibiliConfigPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', bilibiliFactory = null, verifier = null, network = null }) {
     this.preview = new ConsolePreviewOutput({ token: ownerToken, host, port });
     this.bilibiliConfigPath = bilibiliConfigPath;
     this.bilibiliFactory = bilibiliFactory;
     this.bilibili = null;
+    this.network = network || new RtmpNetworkPolicy();
     this.verifier = verifier || new PlaybackVerifier({
       configPath: bilibiliConfigPath,
       outputStatus: () => this.bilibili?.status() || { state: 'stopped' },
+      dispatcherFactory: () => this.network.apiDispatcher(),
     });
     this.recorder = new SceneRecorder({
       capture: new CaptureClient({ desktopUrl, token: agentToken, fps }),
@@ -29,6 +32,7 @@ export class ScenePreviewService {
       preview: this.preview.status(),
       bilibili: this.bilibili?.status() || { state: 'stopped', verifiedAt: null, lastError: null },
       verification: this.verifier.status(),
+      network: this.network.status(),
     };
   }
 
@@ -58,12 +62,22 @@ export class ScenePreviewService {
       this.bilibili = null;
     }
     if (!this.bilibili) {
-      this.bilibili = this.bilibiliFactory ? this.bilibiliFactory(config) : new BilibiliRtmpOutput({ target: config.rtmpUrl, streamKey: config.streamKey });
+      this.bilibili = this.bilibiliFactory ? this.bilibiliFactory({ ...config, network: this.network }) : new BilibiliRtmpOutput({ target: config.rtmpUrl, streamKey: config.streamKey, network: this.network });
       this.recorder.outputs.set('bilibili', this.bilibili);
     }
     await this.recorder.startOutput('bilibili');
     this.verifier.start();
     return this.status();
+  }
+
+  saveNetwork(body) {
+    if (['starting', 'running', 'stopping', 'reconnecting'].includes(this.bilibili?.status().state)) throw new Error('stop the live output before changing network');
+    return this.network.save(body);
+  }
+
+  checkNetwork() {
+    const config = validateLiveConfig(readLiveConfig(this.bilibiliConfigPath));
+    return this.network.check(config.rtmpUrl);
   }
 
   verifyBilibili() {

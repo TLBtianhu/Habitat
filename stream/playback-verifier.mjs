@@ -1,5 +1,6 @@
 // 独立播放验证器：不接触推流进程，只通过公开房间和播放地址验证真实播放。
 import { spawn } from 'node:child_process';
+import { fetch as undiciFetch } from 'undici';
 import { normalizeStreamKey, readLiveConfig } from './bilibili-live-config.mjs';
 
 function safeError(error) {
@@ -23,7 +24,7 @@ async function decodePlaybackFrame(url, { timeoutMs = 15000, spawnImpl = spawn }
 }
 
 export class PlaybackVerifier {
-  constructor({ configPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', outputStatus = () => ({ state: 'stopped' }), fetchImpl = fetch, decoder = decodePlaybackFrame, intervalMs = 15000, ttlMs = 45000, now = () => Date.now(), timeoutMs = 10000 }) {
+  constructor({ configPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', outputStatus = () => ({ state: 'stopped' }), fetchImpl = fetch, decoder = decodePlaybackFrame, intervalMs = 15000, ttlMs = 45000, now = () => Date.now(), timeoutMs = 10000, dispatcherFactory = () => undefined }) {
     this.configPath = configPath;
     this.outputStatus = outputStatus;
     this.fetch = fetchImpl;
@@ -32,6 +33,8 @@ export class PlaybackVerifier {
     this.ttlMs = Math.max(1, ttlMs);
     this.now = now;
     this.timeoutMs = timeoutMs;
+    this.dispatcherFactory = dispatcherFactory;
+    this.dispatcher = null;
     this.enabled = false;
     this.generation = 0;
     this.inflight = null;
@@ -72,7 +75,8 @@ export class PlaybackVerifier {
   }
 
   async fetchJson(url) {
-    const response = await this.fetch(url, { signal: AbortSignal.timeout(this.timeoutMs) });
+    const fetcher = this.dispatcher && this.fetch === fetch ? undiciFetch : this.fetch;
+    const response = await fetcher(url, { signal: AbortSignal.timeout(this.timeoutMs), ...(this.dispatcher ? { dispatcher: this.dispatcher } : {}) });
     const data = await response.json();
     if (data.code !== 0) throw new Error(`Bilibili API ${data.code}: ${data.message || 'failed'}`);
     return data.data;
@@ -128,6 +132,7 @@ export class PlaybackVerifier {
     if (this.enabled) return this.status();
     this.enabled = true;
     this.generation += 1;
+    this.dispatcher = this.dispatcherFactory();
     this.state = 'idle';
     this.verifyNow().catch(() => {});
     this.timer = setInterval(() => { this.verifyNow(false).catch(() => {}); }, this.intervalMs);
@@ -140,6 +145,8 @@ export class PlaybackVerifier {
     this.generation += 1;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.dispatcher?.close) void this.dispatcher.close().catch(() => {});
+    this.dispatcher = null;
     this.state = 'stopped';
     this.playbackDecoded = false;
     return this.status();
