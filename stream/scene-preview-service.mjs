@@ -3,7 +3,7 @@ import { SceneRecorder } from './scene-recorder.mjs';
 import { CaptureClient } from './capture-client.mjs';
 import { ConsolePreviewOutput } from './outputs/console-preview.mjs';
 import { BilibiliRtmpOutput } from './outputs/bilibili-rtmp.mjs';
-import { readLiveConfig, validateLiveConfig } from './bilibili-live-config.mjs';
+import { readLiveConfig, validateLiveConfig, buildBilibiliTarget } from './bilibili-live-config.mjs';
 
 export class ScenePreviewService {
   constructor({ desktopUrl, agentToken, ownerToken, fps = 5, host = '127.0.0.1', port = 9281, bilibiliConfigPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', bilibiliFactory = null }) {
@@ -43,7 +43,7 @@ export class ScenePreviewService {
     if (this.bilibili?.status().state === 'running') return this.status();
     const config = validateLiveConfig(readLiveConfig(this.bilibiliConfigPath));
     if (!config.rtmpUrl || !config.streamKey) throw new Error('Bilibili live config incomplete');
-    const target = /^rtmps?:\/\//.test(config.rtmpUrl) ? `${config.rtmpUrl.replace(/\/$/, '')}/${config.streamKey}` : config.rtmpUrl;
+    const target = buildBilibiliTarget(config.rtmpUrl, config.streamKey);
     if (this.bilibili && this.bilibili.target !== target) {
       await this.bilibili.stop();
       this.bilibili = null;

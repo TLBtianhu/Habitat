@@ -1,11 +1,12 @@
 // B 站输出：只消费统一 FramePacket；FFmpeg 编码与网络输出，不持有桌面渲染。
 import { spawn } from 'node:child_process';
+import { buildBilibiliTarget } from '../bilibili-live-config.mjs';
 
 export class BilibiliRtmpOutput {
   constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000 }) {
     if (!target) throw new Error('Bilibili target required');
     if (/^rtmps?:\/\//.test(target) && !streamKey) throw new Error('Bilibili streamKey required');
-    this.target = /^rtmps?:\/\//.test(target) ? `${target.replace(/\/$/, '')}/${streamKey}` : target;
+    this.target = buildBilibiliTarget(target, streamKey);
     this.ffmpeg = ffmpeg;
     this.fps = fps;
     this.bitrate = bitrate;

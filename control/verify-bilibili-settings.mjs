@@ -66,7 +66,7 @@ try {
   assert.ok(!JSON.stringify(saved.body).includes('secret-key'));
   const preserved = await api('/bilibili/live/settings', { method: 'POST', owner: true, body: { rtmpUrl: 'rtmp://127.0.0.1/other', streamKey: '' } });
   assert.equal(preserved.body.configured, true);
-  assert.equal(JSON.parse(fs.readFileSync(configFile, 'utf8')).streamKey, 'secret-key');
+  assert.equal(JSON.parse(fs.readFileSync(configFile, 'utf8')).streamKey, '?streamname=secret-key');
   assert.equal((await api('/bilibili/live/start', { method: 'POST' })).status, 403);
   assert.equal((await api('/bilibili/live/stop', { method: 'POST', owner: true })).body.bilibili.state, 'stopped');
   const html = await (await fetch(`http://127.0.0.1:${port}/console.html`)).text();

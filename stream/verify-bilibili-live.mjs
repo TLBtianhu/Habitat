@@ -6,12 +6,18 @@ import { EventEmitter } from 'node:events';
 import { ScenePreviewService } from './scene-preview-service.mjs';
 import { BilibiliRtmpOutput } from './outputs/bilibili-rtmp.mjs';
 import { BilibiliLiveSettings } from '../control/bilibili-live-settings.mjs';
-import { publicLiveConfig, readLiveConfig, validateLiveConfig, writeLiveConfig } from './bilibili-live-config.mjs';
+import { publicLiveConfig, readLiveConfig, validateLiveConfig, writeLiveConfig, buildBilibiliTarget } from './bilibili-live-config.mjs';
 
 const root = path.join(process.cwd(), '.tmp', `bilibili-live-${process.pid}`);
 fs.mkdirSync(root, { recursive: true });
 const configFile = path.join(root, 'config', 'bilibili-live.json');
 writeLiveConfig(configFile, { rtmpUrl: 'rtmp://127.0.0.1/live', streamKey: 'secret-key' });
+const bare = 'live_123_456&key=abc';
+const expected = 'rtmp://127.0.0.1/live-bvc/?streamname=live_123_456&key=abc';
+for (const input of [bare, `streamname=${bare}`, `?streamname=${bare}`, `rtmp://127.0.0.1/live-bvc/?streamname=${bare}`]) {
+  assert.equal(buildBilibiliTarget('rtmp://127.0.0.1/live-bvc/', input), expected);
+}
+assert.equal(validateLiveConfig({ rtmpUrl: 'rtmp://127.0.0.1/live', streamKey: bare }).streamKey, `?streamname=${bare}`);
 assert.throws(() => validateLiveConfig({ rtmpUrl: 'http://127.0.0.1/live', streamKey: 'x' }));
 assert.throws(() => validateLiveConfig({ rtmpUrl: 'rtmp://user:pass@127.0.0.1/live', streamKey: 'x' }));
 assert.equal(publicLiveConfig(readLiveConfig(configFile)).streamKeySet, true);
@@ -66,7 +72,7 @@ try {
   await scenePreview.stopBilibili();
   assert.equal(settings.get().applied, false);
   settings.save({ rtmpUrl: 'rtmp://127.0.0.1/other', streamKey: '' });
-  assert.equal(readLiveConfig(configFile).streamKey, 'secret-key');
+  assert.equal(readLiveConfig(configFile).streamKey, '?streamname=secret-key');
   await scenePreview.startBilibili();
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(settings.get().applied, true);

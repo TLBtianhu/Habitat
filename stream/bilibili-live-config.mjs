@@ -2,6 +2,27 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+export function normalizeStreamKey(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  if (/^rtmps?:\/\//.test(raw)) {
+    const url = new URL(raw);
+    if (!url.search.startsWith('?streamname=')) throw new Error('streamname required in streamKey');
+    return url.search;
+  }
+  if (raw.startsWith('?')) {
+    if (!raw.startsWith('?streamname=')) throw new Error('streamname required in streamKey');
+    return raw;
+  }
+  if (raw.startsWith('streamname=')) return `?${raw}`;
+  return `?streamname=${raw}`;
+}
+
+export function buildBilibiliTarget(rtmpUrl, streamKey) {
+  if (!/^rtmps?:\/\//.test(rtmpUrl)) return rtmpUrl;
+  return `${rtmpUrl.replace(/\/$/, '')}/${normalizeStreamKey(streamKey)}`;
+}
+
 export function readLiveConfig(file) {
   if (!fs.existsSync(file)) return { rtmpUrl: '', streamKey: '' };
   const value = JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -17,7 +38,7 @@ export function validateLiveConfig(value) {
   let url;
   try { url = new URL(rtmpUrl); } catch { throw new Error('invalid RTMP URL'); }
   if (!['rtmp:', 'rtmps:'].includes(url.protocol) || !url.host || url.username || url.password || url.search || url.hash) throw new Error('invalid RTMP URL');
-  return { rtmpUrl: url.toString().replace(/\/$/, ''), streamKey };
+  return { rtmpUrl: url.toString().replace(/\/$/, ''), streamKey: normalizeStreamKey(streamKey) };
 }
 
 export function writeLiveConfig(file, value) {

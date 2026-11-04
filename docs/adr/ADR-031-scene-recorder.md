@@ -24,7 +24,7 @@ Compositor CaptureSession
 
 ## 输出职责
 
-- `BilibiliRtmpOutput`：使用 FFmpeg 编码，只有显式启动才连接目标；没有公网自动启动。RTMP 地址和 streamKey 由 owner 在控制台配置，streamKey 只写不回显；`applied` 表示输出运行，`verified` 只能来自独立播放验证，不能由配置存在或 FFmpeg 启动推断。
+- `BilibiliRtmpOutput`：使用 FFmpeg 编码，只有显式启动才连接目标；没有公网自动启动。RTMP 地址和 streamKey 由 owner 在控制台配置，streamKey 只写不回显；输入可为裸 streamname、`streamname=...`、`?streamname=...` 或完整 RTMP URL，统一生成 `.../?streamname=...`。`applied` 表示输出运行，`verified` 只能来自独立播放验证，不能由配置存在或 FFmpeg 启动推断。
 - `ConsolePreviewOutput`：owner-only HTTP 预览，使用同一份帧包，不重新渲染，不是公开直播服务。控制台 Live 页由 `ScenePreviewService` 提供 owner 主动启停，未启动时保留原 HLS 回退；图像通过控制面同源 `/scene/frame` 返回，避免跨端口预检和 URL 中的 token。
 - 输出可以分别 `start/push/stop/status`，一个输出失败不会阻断其他输出；故障移除后录制器可以恢复 `running`。
 - `starting`、运行、失败、停止中、已停止分开。FFmpeg 未确认退出时不得报告 stopped。
