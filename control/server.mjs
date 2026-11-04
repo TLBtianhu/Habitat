@@ -13,6 +13,7 @@ import { AfterActionStore } from '../agent/after-action.mjs';
 import { PluginInstaller } from './plugin-installer.mjs';
 import { RecoveryManager } from './recovery.mjs';
 import { InstanceSettings } from './instance-settings.mjs';
+import { AuthFlowController } from './auth-flow.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STAGE_ORIGIN = process.env.HABITAT_STAGE || 'http://127.0.0.1:9230';
@@ -99,10 +100,11 @@ const pluginInstaller = new PluginInstaller({
 });
 const recovery = new RecoveryManager();
 const instanceSettings = new InstanceSettings();
+const authFlow = new AuthFlowController({ baseUrl: process.env.HABITAT_NAPCAT_WEBUI_URL || 'http://127.0.0.1:6099/api' });
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 function json(res, code, body) {
-  res.writeHead(code, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+  res.writeHead(code, { 'content-type': 'application/json', 'access-control-allow-origin': '*', 'cache-control': 'no-store' });
   res.end(JSON.stringify(body));
 }
 function isOwner(req) {
@@ -214,6 +216,18 @@ http.createServer(async (req, res) => {
       res.end(data);
     });
     return;
+  }
+  if (url.pathname === '/auth/status' && req.method === 'GET') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    if (url.searchParams.get('provider') && url.searchParams.get('provider') !== 'napcat') return json(res, 400, { error: 'unsupported auth provider' });
+    try { return json(res, 200, await authFlow.status()); }
+    catch (e) { return json(res, 502, { error: e.message }); }
+  }
+  if (url.pathname === '/auth/refresh' && req.method === 'POST') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    if (url.searchParams.get('provider') && url.searchParams.get('provider') !== 'napcat') return json(res, 400, { error: 'unsupported auth provider' });
+    try { return json(res, 200, await authFlow.refresh()); }
+    catch (e) { return json(res, 502, { error: e.message }); }
   }
   if (req.method === 'GET' && url.pathname === '/status') return json(res, 200, state);
   if (url.pathname === '/settings') {

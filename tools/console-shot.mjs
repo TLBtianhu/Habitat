@@ -8,7 +8,7 @@ const port = Number(process.env.SHOT_CDP_PORT || 9336);
 const token = process.env.HABITAT_OWNER_TOKEN || fs.readFileSync('/etc/habitat/owner.token', 'utf8').trim();
 const url = process.env.SHOT_URL || `http://127.0.0.1:9240/?token=${token}`;
 const waitMs = Number(process.env.SHOT_WAIT_MS || 12000);
-const profile = `/tmp/habitat-console-shot-${process.pid}`;
+const profile = process.env.SHOT_PROFILE || `${process.env.HABITAT_TMP_ROOT || '/opt/habitat/tmp'}/console-shot-${process.pid}`;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const chrome = spawn(chromePath, [

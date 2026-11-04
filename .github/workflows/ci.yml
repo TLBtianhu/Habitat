@@ -67,6 +67,7 @@ jobs:
           node control/verify-instance-settings.mjs
           node control/verify-instance-paths.mjs
           node control/verify-auth-flow.mjs
+          node control/verify-auth-http.mjs
       - name: Windows client lifecycle tests
         if: matrix.os == 'windows-latest'
         shell: powershell

@@ -8,7 +8,7 @@ function responseData(data) {
 }
 
 export class AuthFlowController {
-  constructor({ fetchImpl = fetch, tokenFile = process.env.NAPCAT_TOKEN_FILE || '/opt/habitat/config/napcat.token', baseUrl = 'http://127.0.0.1:6099/api' } = {}) {
+  constructor({ fetchImpl = fetch, tokenFile = process.env.HABITAT_NAPCAT_TOKEN_FILE || process.env.NAPCAT_TOKEN_FILE || '/opt/habitat/config/napcat.token', baseUrl = 'http://127.0.0.1:6099/api' } = {}) {
     this.fetch = fetchImpl;
     this.tokenFile = tokenFile;
     this.baseUrl = baseUrl.replace(/\/$/, '');

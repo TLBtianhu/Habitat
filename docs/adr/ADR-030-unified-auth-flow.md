@@ -1,7 +1,7 @@
 # ADR-030: 控制台统一认证刷新流程
 
 日期：2026-11-04
-状态：Accepted（核心控制器与 NapCat 实现已验证；控制台页面接入待完成）
+状态：Accepted（核心控制器、NapCat 实现与控制台页面均已验证）
 
 ## 目标
 
@@ -30,10 +30,10 @@
 
 ## 控制台边界
 
-后续控制台页面和 owner-only 接口直接调用 `AuthFlowController.status()` 与 `refresh()`，不复制 NapCat 的鉴权和二维码算法。其他提供者在有真实实现后加入，不能用模拟状态补齐统一页面。
+控制台 Login 页面和 owner-only `/auth/status`、`/auth/refresh` 直接调用 `AuthFlowController.status()` 与 `refresh()`，不复制 NapCat 的鉴权和二维码算法。其他提供者在有真实实现后加入，不能用模拟状态补齐统一页面。
 
 ## 验证
 
 - `control/verify-auth-flow.mjs`：凭证交换、刷新、状态判断、图像生成和秘密不泄露。
-- 真实 NapCat 刷新已生成可扫描 PNG。
-- 扫码后必须再次验证 NapCat `loggedIn` 与 Habitat QQ `ready`，才算恢复完成。
+- `control/verify-auth-http.mjs`：owner 权限、刷新二维码、真实 ready、无缓存和 Login 页面。
+- 真实 NapCat 刷新已生成可扫描 PNG，生产接口已验证已登录时不重复生成二维码；真实浏览器已验证 Login 页面和刷新按钮。

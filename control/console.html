@@ -25,12 +25,15 @@
   .from { color:#7c9eff; margin-right:6px; }
   .at { color:#475569; font-size:11px; margin-left:6px; }
   .muted { color:#64748b; }
+  .auth-qr { display:block; width:260px; max-width:100%; margin-top:12px; padding:8px; background:white; border-radius:8px; }
+  .auth-state { font-weight:600; margin:8px 0; }
 </style>
 </head>
 <body>
 <div id="tabs">
   <div class="tab active" data-tab="live">Live</div>
   <div class="tab" data-tab="chat">Chat</div>
+  <div class="tab" data-tab="auth">Login</div>
   <div class="tab" data-tab="tasks">Tasks</div>
   <div id="state">连接中…</div>
 </div>
@@ -352,10 +355,58 @@ window.act = async (id, a) => {
   renderTasks();
 };
 
+// ---- Auth：owner 主动刷新；只显示本次后端返回的认证材料 ----
+let authBusy = false;
+function authLabel(state) {
+  return ({ ready: '已登录', auth_required: '需要登录/扫码', awaiting_scan: '等待扫码确认', connecting: '正在连接' })[state] || '状态未知';
+}
+function paintAuth(result) {
+  const image = result.image || null;
+  side.innerHTML =
+    '<div class="card"><div class="muted">统一认证 · NapCat / QQ</div>' +
+    `<div class="auth-state">${esc(authLabel(result.state))}</div>` +
+    `<div class="muted">状态更新时间 ${esc(clock(result.checkedAt || Date.now()))}</div>` +
+    '<div class="row" style="margin-top:10px"><button id="refresh-auth">刷新认证状态</button></div>' +
+    (image
+      ? `<img class="auth-qr" src="data:${esc(image.mimeType)};base64,${image.data}" alt="当前 NapCat 登录二维码" />`
+      : '<div class="muted" style="margin-top:10px">点击刷新获取当前认证材料；已登录时不显示二维码。</div>') +
+    '</div>';
+  const button = document.getElementById('refresh-auth');
+  if (button) button.onclick = refreshAuth;
+}
+async function renderAuth() {
+  if (authBusy) return;
+  authBusy = true;
+  try {
+    paintAuth(await get('/auth/status'));
+  } catch (e) {
+    side.innerHTML = '<div class="card"><div class="auth-state">认证状态读取失败</div><div class="muted">' + esc(e.message) + '</div><button id="refresh-auth">重试刷新</button></div>';
+    document.getElementById('refresh-auth').onclick = refreshAuth;
+  } finally {
+    authBusy = false;
+  }
+}
+async function refreshAuth() {
+  if (authBusy) return;
+  authBusy = true;
+  try {
+    stateEl.textContent = '正在刷新认证状态…';
+    paintAuth(await post('/auth/refresh', {}));
+    stateEl.textContent = '认证状态已刷新';
+  } catch (e) {
+    stateEl.textContent = e.message;
+    side.innerHTML = '<div class="card"><div class="auth-state">刷新失败</div><div class="muted">' + esc(e.message) + '</div><button id="refresh-auth">重试刷新</button></div>';
+    document.getElementById('refresh-auth').onclick = refreshAuth;
+  } finally {
+    authBusy = false;
+  }
+}
+
 async function render(tab) {
   try {
     stateEl.textContent = '已连接 127.0.0.1:9240';
     if (tab === 'chat') return await renderChat();
+    if (tab === 'auth') return await renderAuth();
     if (tab === 'tasks') return await renderTasks();
   } catch (e) {
     stateEl.textContent = e.message;
