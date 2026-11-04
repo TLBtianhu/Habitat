@@ -56,7 +56,9 @@ jobs:
       - name: Stream runtime tests
         run: |
           node stream/verify-scene-recorder.mjs
+          node stream/verify-bilibili-live.mjs
           node control/verify-scene-preview.mjs
+          node control/verify-bilibili-settings.mjs
       - name: Control and recovery tests
         run: |
           node control/verify-cross-channel.mjs

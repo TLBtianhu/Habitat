@@ -145,6 +145,7 @@ setInterval(refreshLive, 5000);
 
 async function renderLiveSide() {
   const outlets = await get('/outlets/status');
+  const live = await get('/bilibili/live/settings');
   const card = (name, title, note) => {
     const o = outlets[name] || { running: false };
     const action = o.running ? 'stop' : 'start';
@@ -156,9 +157,23 @@ async function renderLiveSide() {
   const previewCard = `<div class="card"><div>统一 SceneRecorder 预览：<span class="${previewRunning ? '' : 'muted'}">${previewRunning ? '运行中' : '已停止'}</span></div>` +
     `<div class="muted" style="margin:6px 0 10px">owner 主动开启；只使用统一帧包，不公开推流。</div>` +
     `<button class="${previewRunning ? 'ghost' : ''}" onclick="scenePreviewAction('${previewRunning ? 'stop' : 'start'}')">${previewRunning ? '停止统一预览' : '开启统一预览'}</button></div>`;
-  side.innerHTML = previewCard + '<div class="card muted">画面由 Desktop 合成；以下只是独立的编码与通信出口。</div>' +
-    card('hls', '本地 HLS', '用于本地预览，不对外公开。') +
-    card('rtmp', 'B 站 RTMPS', outlets.rtmp?.configured ? '使用主人保存的推流配置。' : '尚未配置推流地址。');
+  const outputState = live.output?.state || 'stopped';
+  const liveState = live.verified ? '已生效（已验证播放）'
+    : outputState === 'running' ? '输出运行中，未验证播放'
+      : outputState === 'starting' ? '启动中'
+        : live.state === 'unconfigured' ? '未配置'
+          : live.state === 'degraded' ? '失败/降级'
+            : live.state === 'stopped' ? '已停止' : '已配置，未验证';
+  const biliCard = `<div class="card"><div>B 站统一推流：<span class="${live.applied ? '' : 'muted'}">${liveState}</span></div>` +
+    `<div class="muted" style="margin:6px 0 8px">streamKey 只写不回显；保存配置不会自动开播。</div>` +
+    `<input id="bili-url" placeholder="RTMP 推流地址" value="${esc(live.rtmpUrl)}" style="width:100%;margin-bottom:6px" />` +
+    `<input id="bili-key" type="password" autocomplete="off" placeholder="${live.streamKeySet ? '已保存 streamKey（可替换）' : 'streamKey（不会回显）'}" style="width:100%;margin-bottom:8px" />` +
+    `<div class="row"><button id="bili-save">保存配置</button><button id="bili-toggle" class="${live.applied ? 'ghost' : ''}" ${live.configured || live.applied ? '' : 'disabled'}>${live.applied ? '停止推流' : '开始推流'}</button></div>` +
+    `<div class="muted" style="margin-top:8px">最近播放验证：${live.lastVerifiedAt ? new Date(live.lastVerifiedAt).toLocaleString() : '尚未验证'}${live.lastError ? ' · ' + esc(live.lastError) : ''}</div></div>`;
+  side.innerHTML = previewCard + biliCard + '<div class="card muted">画面由 Desktop 合成；以下只是独立的编码与通信出口。</div>' +
+    card('hls', '本地 HLS', '用于本地预览，不对外公开。');
+  document.getElementById('bili-save').onclick = saveBilibiliLive;
+  document.getElementById('bili-toggle').onclick = () => bilibiliLiveAction(live.applied ? 'stop' : 'start');
 }
 window.outletAction = async (name, action) => {
   if (name === 'rtmp' && action === 'start' && !confirm('确认按主人配置向 B 站公开推流？')) return;
@@ -178,6 +193,31 @@ window.scenePreviewAction = async (action) => {
     await post(`/scene/preview/${action}`, {});
     stateEl.textContent = '已执行';
     startLive();
+    await renderLiveSide();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
+};
+
+window.saveBilibiliLive = async () => {
+  try {
+    stateEl.textContent = '正在保存…';
+    await post('/bilibili/live/settings', {
+      rtmpUrl: document.getElementById('bili-url').value.trim(),
+      streamKey: document.getElementById('bili-key').value,
+    });
+    stateEl.textContent = '配置已保存';
+    await renderLiveSide();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
+};
+window.bilibiliLiveAction = async (action) => {
+  if (action === 'start' && !confirm('确认按当前配置向 B 站公开推流？')) return;
+  try {
+    stateEl.textContent = '正在执行…';
+    await post(`/bilibili/live/${action}`, {});
+    stateEl.textContent = '已执行';
     await renderLiveSide();
   } catch (e) {
     stateEl.textContent = e.message;

@@ -40,6 +40,7 @@ const control = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', i
     HABITAT_CONTROL_PORT: String(controlPort),
     FB_DESKTOP_URL: `http://127.0.0.1:${desktopPort}`,
     HABITAT_SCENE_PREVIEW_PORT: '0',
+    HABITAT_BILIBILI_LIVE_CONFIG: path.join(root, 'bilibili-live.json'),
     HABITAT_NAPCAT_TOKEN_FILE: napcatFile,
     HABITAT_OWNER_TOKEN_FILE: ownerFile,
     HABITAT_AGENT_TOKEN_FILE: agentFile,

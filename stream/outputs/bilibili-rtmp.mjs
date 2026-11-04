@@ -18,6 +18,7 @@ export class BilibiliRtmpOutput {
     this.lastPtsMs = null;
     this.lastError = null;
     this.exitCode = null;
+    this.verifiedAt = null;
   }
 
   status() {
@@ -26,6 +27,7 @@ export class BilibiliRtmpOutput {
       frames: this.frames,
       lastSeq: this.lastSeq,
       lastPtsMs: this.lastPtsMs,
+      verifiedAt: this.verifiedAt,
       exitCode: this.exitCode,
       lastError: this.lastError,
     };
@@ -35,6 +37,7 @@ export class BilibiliRtmpOutput {
     if (this.child) return this.status();
     this.lastError = null;
     this.exitCode = null;
+    this.verifiedAt = null;
     const args = [
       '-y', '-loglevel', 'error',
       '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(this.fps), '-i', '-',
@@ -79,6 +82,11 @@ export class BilibiliRtmpOutput {
     this.frames += 1;
     this.lastSeq = packet.seq;
     this.lastPtsMs = packet.ptsMs;
+  }
+
+  markVerified(at = Date.now()) {
+    if (this.state === 'running') this.verifiedAt = at;
+    return this.status();
   }
 
   async stop() {

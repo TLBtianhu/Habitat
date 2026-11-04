@@ -24,7 +24,7 @@ Compositor CaptureSession
 
 ## 输出职责
 
-- `BilibiliRtmpOutput`：使用 FFmpeg 编码，只有显式启动才连接目标；没有公网自动启动。
+- `BilibiliRtmpOutput`：使用 FFmpeg 编码，只有显式启动才连接目标；没有公网自动启动。RTMP 地址和 streamKey 由 owner 在控制台配置，streamKey 只写不回显；`applied` 表示输出运行，`verified` 只能来自独立播放验证，不能由配置存在或 FFmpeg 启动推断。
 - `ConsolePreviewOutput`：owner-only HTTP 预览，使用同一份帧包，不重新渲染，不是公开直播服务。控制台 Live 页由 `ScenePreviewService` 提供 owner 主动启停，未启动时保留原 HLS 回退；图像通过控制面同源 `/scene/frame` 返回，避免跨端口预检和 URL 中的 token。
 - 输出可以分别 `start/push/stop/status`，一个输出失败不会阻断其他输出；故障移除后录制器可以恢复 `running`。
 - `starting`、运行、失败、停止中、已停止分开。FFmpeg 未确认退出时不得报告 stopped。
@@ -40,6 +40,8 @@ Compositor CaptureSession
 ## 验证
 
 - `stream/verify-scene-recorder.mjs`：重复帧去重、同一份帧数据与 PTS、输出独立启停、故障隔离和 FFmpeg 生命周期。
+- `stream/verify-bilibili-live.mjs`：RTMP 配置脱敏、输出启停、更新隔离与 verified 状态。
+- `control/verify-bilibili-settings.mjs`：owner 配置保存、非法地址拒绝、密钥保留和 Live 配置页。
 - `control/verify-scene-preview.mjs`：owner 预览启停、授权图像、重启和 Live 页面回退。
 - `stream/verify-scene-live.mjs`：真实桌面 CaptureSession、owner 预览和本地 FFmpeg 文件输出，验证编码帧数，不连接公网 RTMP。
 - 本地文件验收不是直播成功证明；公网推流仍需 owner 明确启动并单独验证。
