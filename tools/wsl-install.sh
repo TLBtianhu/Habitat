@@ -14,7 +14,7 @@ HABITAT_USER="${HABITAT_USER:-$(id -un 1000 2>/dev/null || echo tlb3)}"
 HABITAT_GROUP="$(id -gn "$HABITAT_USER")"
 NODE_HOME="$RUNTIME/node22"
 UNITS=(habitat-stage habitat-control habitat-desktop habitat-agent habitat-voice habitat-audio habitat-outlet-supervisor habitat-pipeline)
-ITEMS=(tools runtime agent desktop voice audio display identity director control stage clients adapters plugins mcp assets-packs)
+ITEMS=(tools runtime agent desktop voice audio display identity director control stage stream clients adapters plugins mcp assets-packs)
 
 [[ "$APP" == /opt/habitat/app && "$ETC" == /opt/habitat/config && "$VAR" == /opt/habitat/data ]]
 mkdir -p "$APP" "$ETC" "$VAR/world-server" "$VAR/artifacts" "$VAR/logs" "$VAR/hls" "$VAR/outlets" "$VAR/adapters" "$VAR/cache/tts" "$VAR/models/tts" "$VAR/outbox" "$VAR/pump" "$VAR/plugins" "$VAR/plugins/downloads" "$VAR/plugins/installed" "$STATE" "$TMP"
