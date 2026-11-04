@@ -59,6 +59,7 @@ const control = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', i
     HABITAT_TASKS_FILE: path.join(root, 'tasks.json'),
     HABITAT_CONTROL_OUTBOX: path.join(root, 'outbox.json'),
     HABITAT_PLUGIN_CACHE: path.join(root, 'plugins'),
+    HABITAT_ADAPTER_STATE_DIR: path.join(root, 'adapters'),
     HABITAT_RESIDENCE_POLICY: path.join(root, 'policy.json'),
   },
   stdio: ['ignore', 'ignore', 'inherit'],
