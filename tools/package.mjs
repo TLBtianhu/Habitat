@@ -11,7 +11,7 @@ const ZIP = path.join(DIST, 'fishbowl-v0.1.zip');
 
 const INCLUDE = [
   'README.md', 'ARCHITECTURE.md', 'PLAN.md', 'worlds.json', 'package.json', 'package-lock.json',
-  'tools', 'director', 'runtime', 'stage', 'agent', 'identity', 'config',
+  'tools', 'director', 'runtime', 'stage', 'stream', 'agent', 'identity', 'config',
   'desktop', 'voice', 'audio', 'control', 'clients', 'adapters', 'plugins', 'mcp',
   'docs',
 ];

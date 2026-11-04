@@ -53,6 +53,8 @@ jobs:
           node tools/verify-mc-client-lock.mjs
           node adapters/mc-launcher/verify-provider.mjs
           node adapters/mc-launcher/verify-runtime-package.mjs
+      - name: Stream runtime tests
+        run: node stream/verify-scene-recorder.mjs
       - name: Control and recovery tests
         run: |
           node control/verify-cross-channel.mjs
