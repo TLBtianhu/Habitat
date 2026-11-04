@@ -16,6 +16,8 @@ import { InstanceSettings } from './instance-settings.mjs';
 import { AuthFlowController } from './auth-flow.mjs';
 import { ScenePreviewService } from '../stream/scene-preview-service.mjs';
 import { BilibiliLiveSettings } from './bilibili-live-settings.mjs';
+import { StreamPolicyStore } from '../stream/stream-policy.mjs';
+import { StreamScheduler } from '../stream/stream-scheduler.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STAGE_ORIGIN = process.env.HABITAT_STAGE || 'http://127.0.0.1:9230';
@@ -110,6 +112,8 @@ const scenePreview = new ScenePreviewService({
   port: Number(process.env.HABITAT_SCENE_PREVIEW_PORT || 9281),
 });
 const bilibiliLiveSettings = new BilibiliLiveSettings({ scenePreview });
+const streamPolicyStore = new StreamPolicyStore();
+const streamScheduler = new StreamScheduler({ scenePreview, policyStore: streamPolicyStore });
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 function json(res, code, body) {
@@ -225,6 +229,36 @@ http.createServer(async (req, res) => {
       res.end(data);
     });
     return;
+  }
+  if (url.pathname === '/stream/status' && req.method === 'GET') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, await streamScheduler.tick()); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
+  if (url.pathname === '/stream/policy' && req.method === 'GET') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    return json(res, 200, streamPolicyStore.get());
+  }
+  if (url.pathname === '/stream/policy' && req.method === 'POST') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, streamPolicyStore.save(await readJson(req))); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
+  if (url.pathname === '/stream/propose' && req.method === 'POST') {
+    const actor = isOwner(req) ? 'owner' : isAgent(req) ? 'agent' : null;
+    if (!actor) return json(res, 403, { error: 'owner or agent required' });
+    try { return json(res, 200, await streamScheduler.propose({ ...(await readJson(req)), actor })); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
+  if (url.pathname === '/stream/start' && req.method === 'POST') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, await streamScheduler.propose({ ...(await readJson(req)), action: 'start', actor: 'owner' })); }
+    catch (e) { return json(res, 400, { error: e.message }); }
+  }
+  if (url.pathname === '/stream/stop' && req.method === 'POST') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, await streamScheduler.propose({ ...(await readJson(req)), action: 'stop', actor: 'owner' })); }
+    catch (e) { return json(res, 400, { error: e.message }); }
   }
   if (url.pathname === '/bilibili/live/network' && req.method === 'GET') {
     if (!isOwner(req)) return json(res, 403, { error: 'owner required' });

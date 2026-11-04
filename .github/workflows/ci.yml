@@ -60,6 +60,7 @@ jobs:
           node stream/verify-playback-verifier.mjs
           node stream/verify-rtmp-reconnect.mjs
           node stream/verify-network-policy.mjs
+          node stream/verify-stream-scheduler.mjs
           node control/verify-scene-preview.mjs
           node control/verify-bilibili-settings.mjs
       - name: Control and recovery tests

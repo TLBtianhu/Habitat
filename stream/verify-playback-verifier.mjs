@@ -68,6 +68,17 @@ try {
   await verifier.verifyNow();
   verifier.stop();
   assert.equal(verifier.status().state, 'stopped');
+  output = { state: 'stopped' };
+  verifier.lastError = 'previous';
+  verifier.lastVerifiedAt = 123;
+  verifier.lastCheckedAt = 456;
+  verifier.consecutiveFailures = 2;
+  verifier.start();
+  assert.equal(verifier.lastError, null);
+  assert.equal(verifier.lastVerifiedAt, null);
+  assert.equal(verifier.lastCheckedAt, null);
+  assert.equal(verifier.consecutiveFailures, 0);
+  verifier.stop();
   console.log('ok: 播放验证合并刷新、真实成功/失败、过期恢复、停止与周期清理');
 } finally {
   verifier.stop();

@@ -174,6 +174,8 @@ async function renderLiveSide() {
     `<div class="row"><button id="bili-save">保存配置</button><button id="bili-toggle" class="${live.applied ? 'ghost' : ''}" ${(live.configured && live.credential?.canStart !== false) || live.applied ? '' : 'disabled'}>${live.applied ? '停止推流' : '开始推流'}</button><button id="bili-verify" class="ghost" ${live.configured || live.applied ? '' : 'disabled'}>刷新状态</button></div>` +
     `<div class="muted" style="margin-top:8px">最近检查：${live.lastCheckedAt ? new Date(live.lastCheckedAt).toLocaleString() : '尚未检查'}<br>最近播放验证：${live.lastVerifiedAt ? new Date(live.lastVerifiedAt).toLocaleString() : '尚未验证'}${live.lastError ? ' · ' + esc(live.lastError) : ''}</div></div>`;
   const network = live.network || { mode: 'direct', apiProxyMode: 'system', lastResult: 'unknown', lastCheckedAt: null, lastError: null };
+  const streamStatus = await get('/stream/status');
+  const streamPolicy = await get('/stream/policy');
   const networkCard = `<div class="card"><div>推流网络：<span class="muted">${network.supported === false ? '未启用系统代理' : network.lastResult === 'reachable' ? 'TCP/SOCKS5 可达' : network.lastResult === 'degraded' ? '预检失败' : '未预检'}</span></div>` +
     `<div class="muted" style="margin:6px 0 8px">默认推流直连，API 可走系统代理；预检不代表直播成功。</div>` +
     `<select id="net-mode" style="width:100%;margin-bottom:6px"><option value="direct" ${network.mode === 'direct' ? 'selected' : ''}>推流直连（推荐）</option><option value="system" ${network.mode === 'system' ? 'selected' : ''}>跟随系统代理（高级）</option><option value="socks5" ${network.mode === 'socks5' ? 'selected' : ''}>SOCKS5 代理</option></select>` +
@@ -181,7 +183,26 @@ async function renderLiveSide() {
     `<div id="net-proxy-fields" style="display:${network.mode === 'socks5' ? 'block' : 'none'}"><input id="net-proxy-host" value="${esc(network.proxyHost || '127.0.0.1')}" placeholder="SOCKS5 地址" style="width:100%;margin-bottom:6px" /><input id="net-proxy-port" type="number" min="1" max="65535" value="${network.proxyPort || 7897}" placeholder="端口" style="width:100%;margin-bottom:6px" /></div>` +
     `<div class="row"><button id="net-save">保存网络</button><button id="net-check" class="ghost">检查网络</button></div>` +
     `<div class="muted" style="margin-top:8px">最近预检：${network.lastCheckedAt ? new Date(network.lastCheckedAt).toLocaleString() : '尚未预检'}${network.lastError ? ' · ' + esc(network.lastError) : ''}</div></div>`;
-  side.innerHTML = previewCard + biliCard + networkCard + '<div class="card muted">画面由 Desktop 合成；以下只是独立的编码与通信出口。</div>' +
+  const streamState = streamStatus.state === 'live' ? 'LIVE（已验证）'
+    : streamStatus.state === 'starting' ? '启动中'
+      : streamStatus.state === 'scheduled' ? '已预约'
+        : streamStatus.state === 'proposed' ? '待授权'
+          : streamStatus.state === 'reconnecting' ? '重连中'
+            : streamStatus.state === 'degraded' ? '失败/降级'
+              : streamStatus.state === 'interrupted' ? '已中断' : '已停止';
+  const streamReason = streamStatus.stopReason ? `原因：${streamStatus.stopReason}` : '';
+  const streamWindow = streamPolicy.windows?.[0] || { start: '20:00', end: '20:30', days: [6] };
+  const streamCard = `<div class="card"><div>自主开播：<span class="${streamStatus.live ? '' : 'muted'}">${streamState}</span></div>` +
+    `<div class="muted" style="margin:6px 0 8px">${streamReason} ${streamStatus.requiresRefresh ? '需要更新推流配置。' : 'LIVE 仅来自真实播放验证。'}</div>` +
+    `<div class="muted" style="margin-bottom:6px">今日时长 ${Math.round(streamStatus.dailyMs / 1000)}s / ${Math.round(streamPolicy.maxDailyMs / 1000)}s${streamStatus.pending?.nextAllowedAt ? ' · 下次可启动 ' + new Date(streamStatus.pending.nextAllowedAt).toLocaleString() : ''}</div>` +
+    `<select id="stream-autonomous" style="width:100%;margin-bottom:6px"><option value="off" ${streamPolicy.autonomous === 'off' ? 'selected' : ''}>自主开播：关闭</option><option value="anytime" ${streamPolicy.autonomous === 'anytime' ? 'selected' : ''}>自主开播：随时</option><option value="windowed" ${streamPolicy.autonomous === 'windowed' ? 'selected' : ''}>自主开播：时间窗</option></select>` +
+    `<div id="stream-window-fields" style="display:${streamPolicy.autonomous === 'windowed' ? 'block' : 'none'}"><div class="row"><input id="stream-window-start" type="time" value="${streamWindow.start}" /><input id="stream-window-end" type="time" value="${streamWindow.end}" /></div><input id="stream-window-days" value="${streamWindow.days.join(',')}" placeholder="星期 0-6，逗号分隔" style="width:100%;margin:6px 0" /></div>` +
+    `<div class="row"><input id="stream-max-duration" type="number" min="1000" value="${streamPolicy.maxDurationMs}" title="单次最长毫秒" /><input id="stream-max-daily" type="number" min="1000" value="${streamPolicy.maxDailyMs}" title="每日额度毫秒" /></div>` +
+    `<div class="row" style="margin-top:6px"><input id="stream-cooldown" type="number" min="0" value="${streamPolicy.cooldownMs}" title="冷却毫秒" /><input id="stream-verification-timeout" type="number" min="1000" value="${streamPolicy.verificationTimeoutMs}" title="播放验证超时毫秒" /></div>` +
+    `<div class="muted" style="margin:6px 0"><label><input id="stream-stop-on-failure" type="checkbox" ${streamPolicy.stopOnEvidenceFailure ? 'checked' : ''} />验证失败自动停止</label> <label><input id="stream-require-verified" type="checkbox" ${streamPolicy.requireVerified ? 'checked' : ''} />必须验证播放</label></div>` +
+    `<div class="row"><button id="stream-start" ${streamStatus.canStart ? '' : 'disabled'}>开始推流</button><button id="stream-stop" class="ghost" ${streamStatus.state === 'stopped' && streamStatus.output.state === 'stopped' ? 'disabled' : ''}>停止推流</button><button id="stream-policy-save" class="ghost">保存自主策略</button></div>` +
+    `<div class="muted" style="margin-top:8px">最近检查：${streamStatus.verification?.lastCheckedAt ? new Date(streamStatus.verification.lastCheckedAt).toLocaleString() : '尚未检查'}<br>最近播放验证：${streamStatus.verification?.lastVerifiedAt ? new Date(streamStatus.verification.lastVerifiedAt).toLocaleString() : '尚未验证'}${streamStatus.lastError ? ' · ' + esc(streamStatus.lastError) : ''}</div></div>`;
+  side.innerHTML = previewCard + streamCard + biliCard + networkCard + '<div class="card muted">画面由 Desktop 合成；以下只是独立的编码与通信出口。</div>' +
     card('hls', '本地 HLS', '用于本地预览，不对外公开。');
   document.getElementById('bili-save').onclick = saveBilibiliLive;
   document.getElementById('bili-toggle').onclick = () => bilibiliLiveAction(live.applied ? 'stop' : 'start');
@@ -190,6 +211,12 @@ async function renderLiveSide() {
   document.getElementById('net-check').onclick = checkBilibiliNetwork;
   document.getElementById('net-mode').onchange = () => {
     document.getElementById('net-proxy-fields').style.display = document.getElementById('net-mode').value === 'socks5' ? 'block' : 'none';
+  };
+  document.getElementById('stream-start').onclick = streamStartAction;
+  document.getElementById('stream-stop').onclick = streamStopAction;
+  document.getElementById('stream-policy-save').onclick = saveStreamPolicy;
+  document.getElementById('stream-autonomous').onchange = () => {
+    document.getElementById('stream-window-fields').style.display = document.getElementById('stream-autonomous').value === 'windowed' ? 'block' : 'none';
   };
 }
 window.outletAction = async (name, action) => {
@@ -275,6 +302,61 @@ window.checkBilibiliNetwork = async () => {
     stateEl.textContent = '正在进行网络预检…';
     const result = await post('/bilibili/live/network/check', {});
     stateEl.textContent = result.lastResult === 'reachable' ? '网络预检通过（不代表直播成功）' : '网络预检失败';
+    await renderLiveSide();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
+};
+
+window.streamStartAction = async () => {
+  if (!confirm('确认向 B 站公开推流？')) return;
+  try {
+    stateEl.textContent = '正在启动推流…';
+    const result = await post('/stream/start', {
+      room: 'default', scene: 'desktop-main',
+      maxDurationMs: Number(document.getElementById('stream-max-duration').value),
+    });
+    stateEl.textContent = result.state === 'live' ? '已开播' : '启动中，等待播放验证';
+    await renderLiveSide();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
+};
+window.streamStopAction = async () => {
+  try {
+    stateEl.textContent = '正在停止推流…';
+    const status = await get('/stream/status');
+    await post('/stream/stop', { intentId: status.lastIntentId });
+    stateEl.textContent = '已停止';
+    await renderLiveSide();
+  } catch (e) {
+    stateEl.textContent = e.message;
+  }
+};
+window.saveStreamPolicy = async () => {
+  try {
+    const autonomous = document.getElementById('stream-autonomous').value;
+    const windows = autonomous === 'windowed' ? [{
+      start: document.getElementById('stream-window-start').value,
+      end: document.getElementById('stream-window-end').value,
+      days: document.getElementById('stream-window-days').value.split(',').map((value) => Number(value.trim())).filter((value) => Number.isSafeInteger(value) && value >= 0 && value <= 6),
+    }] : [];
+    stateEl.textContent = '正在保存自主策略…';
+    await post('/stream/policy', {
+      autonomous,
+      allowedOutputs: ['bilibili'],
+      rooms: ['default'],
+      scenes: ['desktop-main'],
+      maxDurationMs: Number(document.getElementById('stream-max-duration').value),
+      maxDailyMs: Number(document.getElementById('stream-max-daily').value),
+      cooldownMs: Number(document.getElementById('stream-cooldown').value),
+      stopOnEvidenceFailure: document.getElementById('stream-stop-on-failure').checked,
+      requireVerified: document.getElementById('stream-require-verified').checked,
+      verificationTimeoutMs: Number(document.getElementById('stream-verification-timeout').value),
+      timeZone: 'Asia/Shanghai',
+      windows,
+    });
+    stateEl.textContent = '自主策略已保存';
     await renderLiveSide();
   } catch (e) {
     stateEl.textContent = e.message;

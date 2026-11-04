@@ -43,6 +43,8 @@ const control = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', i
     HABITAT_CONTROL_PORT: String(controlPort),
     HABITAT_NAPCAT_WEBUI_URL: `http://127.0.0.1:${webuiPort}/api`,
     HABITAT_NAPCAT_TOKEN_FILE: napcatTokenFile,
+    HABITAT_STREAM_POLICY_FILE: path.join(root, 'stream-policy.json'),
+    HABITAT_STREAM_SCHEDULER_FILE: path.join(root, 'stream-scheduler.json'),
     HABITAT_OWNER_TOKEN_FILE: ownerFile,
     HABITAT_AGENT_TOKEN_FILE: agentFile,
     HABITAT_INSTANCE_ROOT: path.join(root, 'instance'),

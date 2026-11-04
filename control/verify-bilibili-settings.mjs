@@ -19,6 +19,8 @@ const child = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', imp
     ...process.env,
     HABITAT_CONTROL_PORT: String(port),
     HABITAT_BILIBILI_LIVE_CONFIG: configFile,
+    HABITAT_STREAM_POLICY_FILE: path.join(root, 'stream-policy.json'),
+    HABITAT_STREAM_SCHEDULER_FILE: path.join(root, 'stream-scheduler.json'),
     HABITAT_SCENE_PREVIEW_PORT: '0',
     HABITAT_NAPCAT_TOKEN_FILE: napcatFile,
     HABITAT_OWNER_TOKEN_FILE: ownerFile,
@@ -43,10 +45,10 @@ const child = spawn(process.execPath, [fileURLToPath(new URL('./server.mjs', imp
   stdio: ['ignore', 'ignore', 'ignore'],
 });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-async function api(pathname, { method = 'GET', owner = false, body } = {}) {
+async function api(pathname, { method = 'GET', owner = false, agent = false, body } = {}) {
   const response = await fetch(`http://127.0.0.1:${port}${pathname}`, {
     method,
-    headers: { 'content-type': 'application/json', ...(owner ? { authorization: 'Bearer owner-test' } : {}) },
+    headers: { 'content-type': 'application/json', ...(owner ? { authorization: 'Bearer owner-test' } : agent ? { authorization: 'Bearer agent-test' } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: response.status, body: await response.json().catch(() => null) };
@@ -90,6 +92,24 @@ try {
     assert.equal(health.body.credential.requiresRefresh, true);
   }
   await api('/bilibili/live/network', { method: 'POST', owner: true, body: { mode: 'direct', apiProxyMode: 'direct' } });
+  assert.equal((await api('/stream/status')).status, 403);
+  const streamStatus = await api('/stream/status', { owner: true });
+  assert.equal(streamStatus.body.state, 'stopped');
+  assert.equal(streamStatus.body.live, false);
+  assert.equal(streamStatus.body.verification.lastVerifiedAt, null);
+  assert.equal((await api('/stream/policy')).status, 403);
+  const policy = await api('/stream/policy', { owner: true });
+  assert.equal(policy.body.autonomous, 'off');
+  assert.deepEqual(policy.body.rooms, ['default']);
+  assert.deepEqual(policy.body.scenes, ['desktop-main']);
+  assert.equal(policy.body.stopOnEvidenceFailure, true);
+  assert.equal(policy.body.requireVerified, true);
+  assert.equal((await api('/stream/propose', { method: 'POST' })).status, 403);
+  const proposed = await api('/stream/propose', { method: 'POST', agent: true, body: { action: 'start' } });
+  assert.equal(proposed.body.state, 'proposed');
+  assert.equal(proposed.body.started, false);
+  assert.equal(proposed.body.reason, 'autonomous_disabled');
+  assert.equal((await api('/stream/stop', { method: 'POST', owner: true, body: {} })).body.state, 'stopped');
   assert.equal((await api('/bilibili/live/start', { method: 'POST' })).status, 403);
   assert.equal((await api('/bilibili/live/verify', { method: 'POST' })).status, 403);
   const verify = await api('/bilibili/live/verify', { method: 'POST', owner: true });
@@ -100,7 +120,7 @@ try {
   assert.equal((await api('/bilibili/live/verification/status', { owner: true })).body.state, 'stopped');
   assert.equal((await api('/bilibili/live/stop', { method: 'POST', owner: true })).body.bilibili.state, 'stopped');
   const html = await (await fetch(`http://127.0.0.1:${port}/console.html`)).text();
-  assert.ok(html.includes('bili-url') && html.includes('bili-key') && html.includes('saveBilibiliLive') && html.includes('bilibiliLiveAction') && html.includes('bili-verify') && html.includes('bilibiliVerifyAction'));
+  assert.ok(html.includes('bili-url') && html.includes('bili-key') && html.includes('saveBilibiliLive') && html.includes('bilibiliLiveAction') && html.includes('bili-verify') && html.includes('bilibiliVerifyAction') && html.includes('stream-autonomous') && html.includes('streamStartAction') && html.includes('saveStreamPolicy'));
   assert.ok(!html.includes('secret-key'));
   console.log('ok: B站 RTMP owner 配置、脱敏状态、非法地址拒绝与 Live 配置页');
 } finally {

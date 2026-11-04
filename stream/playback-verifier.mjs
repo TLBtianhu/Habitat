@@ -134,6 +134,12 @@ export class PlaybackVerifier {
     this.generation += 1;
     this.dispatcher = this.dispatcherFactory();
     this.state = 'idle';
+    this.lastCheckedAt = null;
+    this.lastVerifiedAt = null;
+    this.lastError = null;
+    this.liveStatus = null;
+    this.playbackDecoded = false;
+    this.consecutiveFailures = 0;
     this.verifyNow().catch(() => {});
     this.timer = setInterval(() => { this.verifyNow(false).catch(() => {}); }, this.intervalMs);
     this.timer.unref?.();

@@ -1,0 +1,132 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { StreamPolicyStore } from './stream-policy.mjs';
+import { StreamScheduler } from './stream-scheduler.mjs';
+import { writeLiveConfig } from './bilibili-live-config.mjs';
+
+const root = path.join(process.cwd(), '.tmp', `stream-scheduler-${process.pid}`);
+fs.mkdirSync(root, { recursive: true });
+const configPath = path.join(root, 'bilibili-live.json');
+writeLiveConfig(configPath, { rtmpUrl: 'rtmp://127.0.0.1/live', streamKey: 'live_123_456&key=abc' });
+let now = 100000;
+let starts = 0;
+let stops = 0;
+let output = { state: 'stopped', lastError: null };
+let verification = { state: 'stopped', verified: false, lastCheckedAt: null, lastVerifiedAt: null, lastError: null, liveStatus: 0, playbackDecoded: false };
+const scenePreview = {
+  bilibiliConfigPath: configPath,
+  status() { return { bilibili: output, verification, network: { mode: 'direct', supported: true, lastResult: 'reachable', lastError: null } }; },
+  async startBilibili() {
+    starts += 1;
+    output = { state: 'running', lastError: null };
+    verification = { state: 'checking', verified: false, lastCheckedAt: now, lastVerifiedAt: null, lastError: null, liveStatus: 0, playbackDecoded: false };
+    return this.status();
+  },
+  async verifyBilibili() {
+    verification = { state: 'verified', verified: true, lastCheckedAt: now, lastVerifiedAt: now, lastError: null, liveStatus: 1, playbackDecoded: true };
+    return verification;
+  },
+  async stopBilibili() {
+    stops += 1;
+    output = { state: 'stopped', lastError: null };
+    verification = { ...verification, state: 'stopped', verified: false, playbackDecoded: false };
+    return this.status();
+  },
+};
+const policyStore = new StreamPolicyStore({ file: path.join(root, 'stream-policy.json') });
+const previousSchedulerFile = process.env.HABITAT_STREAM_SCHEDULER_FILE;
+process.env.HABITAT_STREAM_SCHEDULER_FILE = path.join(root, 'stream-scheduler-state.json');
+const scheduler = new StreamScheduler({ scenePreview, policyStore, now: () => now, tickMs: 1000 });
+try {
+  const disabled = await scheduler.propose({ action: 'start', actor: 'agent' });
+  assert.equal(disabled.state, 'proposed');
+  assert.equal(disabled.started, false);
+  assert.equal(starts, 0);
+  const ownerStart = await scheduler.propose({ action: 'start', actor: 'owner', maxDurationMs: 60000 });
+  assert.equal(ownerStart.state, 'starting');
+  assert.equal(starts, 1);
+  assert.ok(ownerStart.lastIntentId);
+  const live = await scheduler.tick();
+  assert.equal(live.state, 'live');
+  assert.equal(live.live, true);
+  assert.equal(live.verification.playbackDecoded, true);
+  now += 1000;
+  policyStore.save({ autonomous: 'anytime', cooldownMs: 0 });
+  const stopped = await scheduler.propose({ action: 'stop', actor: 'owner' });
+  assert.equal(stopped.state, 'stopped');
+  assert.equal(stopped.stopReason, 'owner');
+  assert.equal(stops, 1);
+  assert.ok(stopped.dailyMs > 0);
+  assert.equal(stopped.live, false);
+  const agentStart = await scheduler.propose({ action: 'start', actor: 'agent', maxDurationMs: 60000 });
+  assert.equal(agentStart.state, 'starting');
+  assert.equal(starts, 2);
+  const agentLive = await scheduler.tick();
+  assert.equal(agentLive.state, 'live');
+  const agentStop = await scheduler.propose({ action: 'stop', actor: 'agent', intentId: agentLive.lastIntentId });
+  assert.equal(agentStop.state, 'stopped');
+  assert.equal(agentStop.stopReason, 'agent');
+  const forbidden = await scheduler.propose({ action: 'stop', actor: 'agent', intentId: 'wrong' });
+  assert.equal(forbidden.reason, 'forbidden');
+
+  await scheduler.start({ actor: 'owner', maxDurationMs: 1000 });
+  now += 1000;
+  const maxStopped = await scheduler.tick();
+  assert.equal(maxStopped.state, 'stopped');
+  assert.equal(maxStopped.stopReason, 'max_duration');
+  assert.ok(maxStopped.dailyMs >= 1000);
+
+  scenePreview.verifyBilibili = async () => ({ state: 'degraded', verified: false, lastCheckedAt: now, lastVerifiedAt: null, lastError: 'playback failed', liveStatus: 0, playbackDecoded: false });
+  await scheduler.start({ actor: 'owner', maxDurationMs: 120000 });
+  now += 60000;
+  const failed = await scheduler.tick();
+  assert.equal(failed.state, 'stopped');
+  assert.equal(failed.stopReason, 'verification_failed');
+  assert.ok(failed.lastError.includes('playback failed'));
+  assert.equal(failed.requiresRefresh, true);
+
+  scenePreview.verifyBilibili = async () => ({ state: 'verified', verified: true, lastCheckedAt: now, lastVerifiedAt: now, lastError: null, liveStatus: 1, playbackDecoded: true });
+  policyStore.save({ autonomous: 'anytime', cooldownMs: 10000 });
+  await scheduler.start({ actor: 'owner', maxDurationMs: 1000 });
+  await scheduler.stop({ actor: 'owner' });
+  const cooling = await scheduler.propose({ action: 'start', actor: 'agent' });
+  assert.equal(cooling.state, 'scheduled');
+  assert.equal(cooling.reason, 'cooldown');
+  const ownerBypass = await scheduler.start({ actor: 'owner', maxDurationMs: 1000 });
+  assert.equal(ownerBypass.state, 'starting');
+  await scheduler.stop({ actor: 'owner' });
+  const coolingAgain = await scheduler.propose({ action: 'start', actor: 'agent' });
+  assert.equal(coolingAgain.state, 'scheduled');
+  now += 10000;
+  await scheduler.tick();
+  assert.equal(starts >= 5, true);
+
+  policyStore.save({ autonomous: 'anytime', maxDurationMs: 1000, maxDailyMs: 1000, cooldownMs: 0 });
+  scheduler.dailyMs = 0;
+  await scheduler.start({ actor: 'owner', maxDurationMs: 1000 });
+  now += 1000;
+  const daily = await scheduler.tick();
+  assert.equal(daily.stopReason, 'daily_limit');
+  const blocked = await scheduler.propose({ action: 'start', actor: 'agent' });
+  assert.equal(blocked.reason, 'daily_limit');
+
+  policyStore.save({ autonomous: 'windowed', maxDailyMs: 7200000, cooldownMs: 0, windows: [{ start: '20:00', end: '20:30', days: [6] }] });
+  scheduler.dailyMs = 0;
+  now = new Date('2026-11-07T11:00:00Z').getTime();
+  const outside = await scheduler.propose({ action: 'start', actor: 'agent' });
+  assert.equal(outside.state, 'scheduled');
+  assert.equal(outside.reason, 'outside_window');
+  now = new Date('2026-11-07T12:10:00Z').getTime();
+  await scheduler.tick();
+  const windowLive = await scheduler.tick();
+  assert.equal(windowLive.state, 'live');
+  await scheduler.stop({ actor: 'owner' });
+  console.log('ok: StreamScheduler off/owner/agent、冷却、单次/每日时长、验证失败、时间窗和强制停止');
+} finally {
+  await scheduler.stop({ actor: 'owner' }).catch(() => {});
+  scheduler.stopTimer();
+  if (previousSchedulerFile === undefined) delete process.env.HABITAT_STREAM_SCHEDULER_FILE;
+  else process.env.HABITAT_STREAM_SCHEDULER_FILE = previousSchedulerFile;
+  fs.rmSync(root, { recursive: true, force: true });
+}
