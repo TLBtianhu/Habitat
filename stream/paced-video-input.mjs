@@ -1,14 +1,16 @@
 // 墙钟节奏的视频输入：最新帧可重复，过期只输出明确待机帧；不向编码器堆积历史帧。
+import { performance } from 'node:perf_hooks';
 import { createStandbyFrame } from './standby-frame.mjs';
 
 export class PacedVideoInput {
-  constructor({ fps, write, onError, now = () => Date.now(), maxAgeMs = 2500, standbyFrame = null }) {
+  constructor({ fps, write, onError, now = () => performance.now(), wallNow = () => Date.now(), maxAgeMs = 2500, standbyFrame = null }) {
     if (!Number.isSafeInteger(fps) || fps < 1 || fps > 60) throw new Error('invalid output fps');
     this.fps = fps;
     this.intervalMs = 1000 / fps;
     this.write = write;
     this.onError = onError;
     this.now = now;
+    this.wallNow = wallNow;
     this.maxAgeMs = maxAgeMs;
     this.standbyFrame = standbyFrame || createStandbyFrame();
     this.latest = null;
@@ -23,13 +25,14 @@ export class PacedVideoInput {
     this.droppedFrames = 0;
     this.standbyFrames = 0;
     this.lastWriteAt = null;
+    this.lastWriteFrameAgeMs = null;
   }
 
   start() {
     if (!this.stopped) return;
     this.stopped = false;
-    this.startedAt = this.now();
-    this.nextWriteAt = this.startedAt;
+    this.startedAt = this.wallNow();
+    this.nextWriteAt = this.now();
     this.timer = setInterval(() => { void this.tick(); }, Math.max(4, Math.floor(this.intervalMs / 2)));
     this.timer.unref?.();
     void this.tick();
@@ -44,6 +47,7 @@ export class PacedVideoInput {
   async tick() {
     if (this.stopped || this.writing) return;
     const at = this.now();
+    const wallAt = this.wallNow();
     if (at < this.nextWriteAt) return;
     this.nextWriteAt += this.intervalMs;
     if (this.nextWriteAt < at) {
@@ -61,7 +65,8 @@ export class PacedVideoInput {
       if (stale) this.standbyFrames += 1;
       else if (seq === this.lastWrittenSeq) this.duplicatedFrames += 1;
       else this.lastWrittenSeq = seq;
-      this.lastWriteAt = at;
+      this.lastWriteAt = wallAt;
+      this.lastWriteFrameAgeMs = stale ? null : Math.max(0, wallAt - packet.capturedAt);
     } catch (error) {
       if (!this.stopped) this.onError(error);
     } finally {
@@ -85,7 +90,8 @@ export class PacedVideoInput {
       droppedFrames: this.droppedFrames,
       standbyFrames: this.standbyFrames,
       lastWriteAt: this.lastWriteAt,
-      lastFrameAgeMs: this.latest ? Math.max(0, this.now() - this.latest.capturedAt) : null,
+      lastWriteFrameAgeMs: this.lastWriteFrameAgeMs,
+      lastFrameAgeMs: this.latest ? Math.max(0, this.wallNow() - this.latest.capturedAt) : null,
     };
   }
 }

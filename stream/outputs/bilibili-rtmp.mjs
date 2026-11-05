@@ -1,11 +1,12 @@
 // B 站输出：只消费统一 FramePacket；FFmpeg 编码与网络输出，不持有桌面渲染。
 import { spawn } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 import { buildBilibiliTarget } from '../bilibili-live-config.mjs';
 import { RtmpNetworkPolicy } from '../network-policy.mjs';
 import { PacedVideoInput } from '../paced-video-input.mjs';
 
 export class BilibiliRtmpOutput {
-  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none', audioCapture = null, network = null, pacing = true, now = () => Date.now() }) {
+  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none', audioCapture = null, network = null, pacing = true, now = () => performance.now(), wallNow = () => Date.now() }) {
     if (!target) throw new Error('Bilibili target required');
     if (/^rtmps?:\/\//.test(target) && !streamKey) throw new Error('Bilibili streamKey required');
     this.target = buildBilibiliTarget(target, streamKey);
@@ -38,8 +39,16 @@ export class BilibiliRtmpOutput {
     this.transportClose = null;
     this.pacing = pacing;
     this.now = now;
+    this.wallNow = wallNow;
     this.videoInput = null;
     this.lastVideoMetrics = null;
+    this.reconnectCount = 0;
+    this.reconnectStartedAt = null;
+    this.lastReconnectAt = null;
+    this.lastRecoveredAt = null;
+    this.lastReconnectDurationMs = null;
+    this.progress = { muxFrame: 0, muxFps: 0, outTimeMs: 0, outSizeBytes: 0, muxSpeed: null, muxDupFrames: 0, muxDropFrames: 0, muxBitrateKbps: null };
+    this.lastKnownProgress = null;
   }
 
   redact(text) {
@@ -52,18 +61,54 @@ export class BilibiliRtmpOutput {
       .slice(0, 600);
   }
 
+  readProgress(chunk) {
+    const lines = (this.progressTail + chunk.toString()).split(/\r?\n/);
+    this.progressTail = lines.pop().slice(-2000);
+    for (const line of lines) {
+      const match = /^([a-z_]+)=(.*)$/.exec(line.trim());
+      if (!match) continue;
+      const [, key, raw] = match;
+      const value = Number(raw);
+      if (key === 'out_time_us' || key === 'out_time_ms') {
+        if (Number.isFinite(value)) this.progress.outTimeMs = value / 1000;
+        continue;
+      }
+      if (key === 'speed') {
+        this.progress.muxSpeed = Number.isFinite(Number.parseFloat(raw)) ? Number.parseFloat(raw) : null;
+        continue;
+      }
+      if (key === 'bitrate') {
+        this.progress.muxBitrateKbps = Number.isFinite(Number.parseFloat(raw)) ? Number.parseFloat(raw) : null;
+        continue;
+      }
+      if (!Number.isFinite(value)) continue;
+      if (key === 'frame') this.progress.muxFrame = value;
+      else if (key === 'fps') this.progress.muxFps = value;
+      else if (key === 'total_size') this.progress.outSizeBytes = value;
+      else if (key === 'dup_frames') this.progress.muxDupFrames = value;
+      else if (key === 'drop_frames') this.progress.muxDropFrames = value;
+    }
+    if (this.enabled && this.state === 'running' && this.progress.outTimeMs > 0) this.lastKnownProgress = { ...this.progress };
+  }
+
   status() {
     return {
       state: this.state,
       audio: this.audio,
       audioCaptureId: this.audioSession?.id || null,
-      ...(this.videoInput?.status() || this.lastVideoMetrics || { writtenFrames: 0, duplicatedFrames: 0, droppedFrames: 0, standbyFrames: 0, lastWriteAt: null, lastFrameAgeMs: null }),
+      ...(this.videoInput?.status() || this.lastVideoMetrics || { writtenFrames: 0, duplicatedFrames: 0, droppedFrames: 0, standbyFrames: 0, lastWriteAt: null, lastWriteFrameAgeMs: null, lastFrameAgeMs: null }),
       frames: this.frames,
       lastSeq: this.lastSeq,
       lastPtsMs: this.lastPtsMs,
       verifiedAt: this.verifiedAt,
       exitCode: this.exitCode,
       lastError: this.lastError,
+      reconnectCount: this.reconnectCount,
+      lastReconnectAt: this.lastReconnectAt,
+      lastRecoveredAt: this.lastRecoveredAt,
+      lastReconnectDurationMs: this.lastReconnectDurationMs,
+      progress: { ...this.progress },
+      lastKnownProgress: { ...(this.lastKnownProgress || this.progress) },
       reconnectAttempts: this.reconnectAttempts,
       retryAt: this.retryAt,
     };
@@ -81,6 +126,8 @@ export class BilibiliRtmpOutput {
     this.retryAt = null;
     this.verifiedAt = null;
     this.stderrTail = '';
+    this.progressTail = '';
+    this.progress = { muxFrame: 0, muxFps: 0, outTimeMs: 0, outSizeBytes: 0, muxSpeed: null, muxDupFrames: 0, muxDropFrames: 0, muxBitrateKbps: null };
     let route;
     try {
       route = await this.network.route(this.target);
@@ -118,6 +165,7 @@ export class BilibiliRtmpOutput {
     args.push('-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-g', String(Math.max(2, Math.round(this.fps * 2))), '-b:v', this.bitrate);
     if (this.audio !== 'none') args.push('-map', '0:v:0', '-map', '1:a:0', '-c:a', 'aac', '-b:a', '128k', '-shortest');
     if (route.tcUrl) args.push('-rtmp_tcurl', route.tcUrl);
+    args.push('-progress', 'pipe:2');
     args.push('-f', 'flv', route.target);
     let child;
     try {
@@ -138,6 +186,7 @@ export class BilibiliRtmpOutput {
     });
     this.child.stderr?.on('data', (chunk) => {
       this.stderrTail = (this.stderrTail + chunk.toString()).slice(-4000);
+      this.readProgress(chunk);
     });
     this.child.once('error', (error) => {
       this.lastError = this.redact(error.message);
@@ -154,6 +203,7 @@ export class BilibiliRtmpOutput {
     this.videoInput = new PacedVideoInput({
       fps: this.fps,
       now: this.now,
+      wallNow: this.wallNow,
       write: (data) => this.writeVideoFrame(data),
       onError: (error) => {
         if (this.enabled && this.state === 'running') {
@@ -197,6 +247,9 @@ export class BilibiliRtmpOutput {
     const detail = this.stderrTail.trim().split(/\r?\n/).filter(Boolean).slice(-4).join(' | ');
     this.lastError = this.redact(`ffmpeg exited ${code}${detail ? `: ${detail}` : ''}`);
     if (this.enabled && this.reconnectEnabled && this.reconnectAttempts < this.maxReconnectAttempts) {
+      this.reconnectCount += 1;
+      this.reconnectStartedAt = this.wallNow();
+      this.lastReconnectAt = this.reconnectStartedAt;
       this.reconnectAttempts += 1;
       const delay = Math.min(30000, this.reconnectBaseMs * (2 ** (this.reconnectAttempts - 1)));
       this.state = 'reconnecting';
@@ -242,6 +295,11 @@ export class BilibiliRtmpOutput {
     this.lastSeq = packet.seq;
     this.lastPtsMs = packet.ptsMs;
     this.reconnectAttempts = 0;
+    if (this.reconnectStartedAt !== null) {
+      this.lastRecoveredAt = this.wallNow();
+      this.lastReconnectDurationMs = Math.max(0, this.lastRecoveredAt - this.reconnectStartedAt);
+      this.reconnectStartedAt = null;
+    }
     this.lastError = null;
   }
 
@@ -252,6 +310,7 @@ export class BilibiliRtmpOutput {
 
   async stop() {
     this.enabled = false;
+    this.reconnectStartedAt = null;
     this.stopVideoInput();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
