@@ -1,7 +1,7 @@
 # ADR-037：单调时钟、FFmpeg 输出进度与重连证据
 
 日期：2026-11-05
-状态：实现与本地验证通过，公开短测中
+状态：Accepted（90 秒公开验证通过；不作无拥塞保证）
 
 ## 背景
 
@@ -58,3 +58,5 @@ OBS 的相关机制包括：使用单调时钟、记录迟到帧、按发送缓�
 ## 公开验证边界
 
 以最长 90 秒公开短测保存 `stream-observability-short.json`，包含当前/最后已知进度、重连历史、真实帧龄和停止原因。是否继续调整 `maxrate/bufsize` 或输出帧率，必须结合这些指标与实际观看结果决定，不预设需要升帧或降码率。
+
+2026-11-05 的公开验证进入真实 LIVE，最终 `stopReason=max_duration`，没有发生重连。最终当前进度为 `muxFrame=470`、`outTimeMs=94144`、`outSizeBytes=1174270`、`muxSpeed=1.02`、`muxDropFrames=0`；最后已知运行进度为 `muxFrame=449`、`outTimeMs≈89899`、`muxSpeed=1.02`。源帧 298、实际写入 478 帧、重复最新帧 179 次、丢弃 1 个调度间隔、待机帧 2 帧，最后写入帧龄 177ms。证据保存在 `data/artifacts/stream-observability-short.json`。这些结果验证了输出节奏、重连历史和最后已知进度的记录，不构成所有网络或播放器场景都不缓冲的承诺。
