@@ -103,6 +103,36 @@ try {
   assert.equal(second.afterAction.id, first.afterAction.id);
   assert.equal(episode.pendingWrites.length, 1, '同一 idempotencyKey 只能有一个 pending write');
 
+  episode = episodeStore.create({ id: 'E4', goal: 'read only dedupe', participants: ['system'] });
+  const noReplay = new ActionTracker({ episode, episodeStore, afterAction, skillLibrary });
+  let noReplayRuns = 0;
+  const skillCountBefore = skillLibrary.list().length;
+  noReplay.register('demo.action', async () => [{ name: 'evidence', ok: true, evidence: 'ready' }], () => ({}), { recordSkill: false, allowDuplicateRun: false });
+  const noReplayArgs = { idempotencyKey: 'stream-start:I1' };
+  await noReplay.track({ kind: 'demo.action', args: noReplayArgs, initialRefs: { intentId: 'I1' }, run: async () => { noReplayRuns++; return { ok: true }; } });
+  const noReplaySecond = await noReplay.track({ kind: 'demo.action', args: noReplayArgs, initialRefs: { intentId: 'I1' }, run: async () => { noReplayRuns++; throw new Error('duplicate must not execute'); } });
+  assert.equal(noReplayRuns, 1, '副作用去重不得再次执行');
+  assert.equal(noReplaySecond.deduped, true);
+  assert.equal(noReplaySecond.result, null);
+  assert.equal(skillLibrary.list().length, skillCountBefore, 'recordSkill=false 不得写入技能库');
+
+  episode = episodeStore.create({ id: 'E5', goal: 'recover initial refs', participants: ['system'] });
+  const crashTracker = new ActionTracker({ episode, episodeStore, afterAction, skillLibrary });
+  crashTracker.register('demo.action', async (write) => [{ name: 'intent evidence', ok: write.data.refs.intentId === 'I-crash', evidence: write.data.refs.intentId }], () => ({}), { recordSkill: false, allowDuplicateRun: false });
+  let crashRuns = 0;
+  void crashTracker.track({
+    kind: 'demo.action', args: { idempotencyKey: 'stream-start:I-crash' }, initialRefs: { intentId: 'I-crash' },
+    run: async () => { crashRuns++; return new Promise(() => {}); },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  const crashRestored = episodeStore.get('E5');
+  assert.equal(crashRestored.pendingWrites[0].data.refs.intentId, 'I-crash', '请求前必须持久化 initial refs');
+  const crashRecovery = new ActionTracker({ episode: crashRestored, episodeStore, afterAction, skillLibrary });
+  crashRecovery.register('demo.action', async (write) => [{ name: 'intent evidence', ok: write.data.refs.intentId === 'I-crash', evidence: write.data.refs.intentId }], () => ({}), { recordSkill: false, allowDuplicateRun: false });
+  await crashRecovery.reconcile({ minIntervalMs: 0 });
+  assert.equal(crashRestored.pendingWrites[0].status, 'confirmed');
+  assert.equal(crashRuns, 1, '响应丢失后的恢复只能读取证据，不能重放');
+
   episode = episodeStore.create({ id: 'E2', goal: 'recover report', participants: ['system'] });
   const pending = episode.addPendingWrite('demo.action', { args: {}, residenceId: 'system' });
   episodeStore.save(episode);

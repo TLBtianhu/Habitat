@@ -18,6 +18,7 @@ import { ScenePreviewService } from '../stream/scene-preview-service.mjs';
 import { BilibiliLiveSettings } from './bilibili-live-settings.mjs';
 import { StreamPolicyStore } from '../stream/stream-policy.mjs';
 import { StreamScheduler } from '../stream/stream-scheduler.mjs';
+import { agentStreamStatus } from '../stream/agent-status.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const STAGE_ORIGIN = process.env.HABITAT_STAGE || 'http://127.0.0.1:9230';
@@ -102,7 +103,6 @@ const pluginInstaller = new PluginInstaller({
   indexUrl: process.env.HABITAT_PLUGIN_INDEX_URL || 'https://github.com/TLBtianhu/habitat-plugins/releases/latest/download/index.json',
   cacheDir: process.env.HABITAT_PLUGIN_CACHE || '/var/lib/habitat/plugins',
 });
-const recovery = new RecoveryManager();
 const instanceSettings = new InstanceSettings();
 const authFlow = new AuthFlowController({ baseUrl: process.env.HABITAT_NAPCAT_WEBUI_URL || 'http://127.0.0.1:6099/api' });
 const scenePreview = new ScenePreviewService({
@@ -114,6 +114,7 @@ const scenePreview = new ScenePreviewService({
 const bilibiliLiveSettings = new BilibiliLiveSettings({ scenePreview });
 const streamPolicyStore = new StreamPolicyStore();
 const streamScheduler = new StreamScheduler({ scenePreview, policyStore: streamPolicyStore });
+const recovery = new RecoveryManager({ streamStatus: () => streamScheduler.status() });
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 function json(res, code, body) {
@@ -229,6 +230,11 @@ http.createServer(async (req, res) => {
       res.end(data);
     });
     return;
+  }
+  if (url.pathname === '/stream/agent/status' && req.method === 'GET') {
+    if (!isOwner(req) && !isAgent(req)) return json(res, 403, { error: 'owner or agent required' });
+    // Agent 观测与 AfterAction 共用只读投影，绝不调用 tick() 或触发 scheduled start。
+    return json(res, 200, agentStreamStatus(streamScheduler.status(), streamPolicyStore.get()));
   }
   if (url.pathname === '/stream/status' && req.method === 'GET') {
     if (!isOwner(req)) return json(res, 403, { error: 'owner required' });

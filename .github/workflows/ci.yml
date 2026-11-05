@@ -37,6 +37,7 @@ jobs:
           node agent/verify-residence-memory-store.mjs
           node agent/verify-after-action.mjs
           node agent/verify-action-tracking.mjs
+          node agent/verify-stream-proposal.mjs
           node agent/verify-event-pump.mjs
           node agent/verify-outbox.mjs
           node agent/verify-presence.mjs

@@ -20,6 +20,7 @@ export class StreamScheduler {
     this.timer = null;
     this.pending = null;
     this.lastIntentId = null;
+    this.lastActor = null;
     this.startedAt = null;
     this.lastStoppedAt = null;
     this.cooldownUntil = 0;
@@ -53,6 +54,7 @@ export class StreamScheduler {
       const previous = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       this.pending = previous.pending || null;
       this.lastIntentId = previous.lastIntentId || null;
+      this.lastActor = previous.lastActor || null;
       this.startedAt = previous.startedAt || null;
       this.lastStoppedAt = previous.lastStoppedAt || null;
       this.cooldownUntil = previous.cooldownUntil || 0;
@@ -64,7 +66,7 @@ export class StreamScheduler {
       this.room = previous.room || 'default';
       this.scene = previous.scene || 'desktop-main';
       this.state = previous.state || 'stopped';
-      if (['starting', 'live', 'reconnecting', 'stopping'].includes(this.state)) {
+      if (['scheduled', 'starting', 'live', 'reconnecting', 'stopping'].includes(this.state)) {
         this.state = 'interrupted';
         this.lastError = 'scheduler_restarted';
         this.stopReason = 'scheduler_restarted';
@@ -89,6 +91,7 @@ export class StreamScheduler {
       state: this.state,
       pending: this.pending,
       lastIntentId: this.lastIntentId,
+      lastActor: this.lastActor,
       startedAt: this.startedAt,
       lastStoppedAt: this.lastStoppedAt,
       cooldownUntil: this.cooldownUntil,
@@ -123,6 +126,7 @@ export class StreamScheduler {
       started: ['starting', 'live', 'reconnecting'].includes(state),
       live,
       lastIntentId: this.lastIntentId,
+      lastActor: this.lastActor,
       startedAt: this.startedAt,
       lastStoppedAt: this.lastStoppedAt,
       cooldownUntil: this.effectiveCooldownUntil(),
@@ -193,7 +197,10 @@ export class StreamScheduler {
 
   async propose({ action, actor = 'agent', room = 'default', scene = 'desktop-main', maxDurationMs, intentId } = {}) {
     if (action === 'stop') {
-      if (actor !== 'owner' && (this.policyStore.get().autonomous === 'off' || intentId !== this.lastIntentId)) return { ...this.status(), started: false, reason: 'forbidden' };
+      const ownedIntent = this.pending?.actor === 'agent'
+        ? this.pending.intentId === intentId
+        : this.lastActor === 'agent' && this.lastIntentId === intentId;
+      if (actor !== 'owner' && (this.policyStore.get().autonomous === 'off' || !ownedIntent)) return { ...this.status(), started: false, reason: 'forbidden' };
       return this.stop({ actor, reason: actor === 'owner' ? 'owner' : 'agent' });
     }
     if (action !== 'start') throw new Error('unsupported stream action');
@@ -202,6 +209,9 @@ export class StreamScheduler {
 
   async start({ actor = 'owner', room = 'default', scene = 'desktop-main', maxDurationMs, intentId } = {}) {
     if (this.transitioning) return this.status();
+    if (intentId && (this.pending?.intentId === intentId || this.lastIntentId === intentId)) {
+      return { ...this.status(), reason: 'duplicate_intent', deduped: true };
+    }
     const policy = this.policyStore.get();
     if (actor === 'agent' && policy.autonomous === 'off') return { ...this.status(), state: 'proposed', started: false, reason: 'autonomous_disabled' };
     if (actor === 'agent' && policy.autonomous === 'windowed' && !this.isWindowOpen(policy.windows, policy.timeZone)) return this.schedule({ actor, room, scene, maxDurationMs, intentId }, 'outside_window', this.now() + 60000);
@@ -217,6 +227,7 @@ export class StreamScheduler {
     this.transitioning = true;
     this.pending = null;
     this.lastIntentId = intentId || crypto.randomUUID();
+    this.lastActor = actor;
     this.room = room;
     this.scene = scene;
     this.maxDurationMs = duration;

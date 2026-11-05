@@ -98,6 +98,15 @@ try {
   assert.equal(streamStatus.body.live, false);
   assert.equal(streamStatus.body.verification.lastVerifiedAt, null);
   assert.equal((await api('/stream/policy')).status, 403);
+  assert.equal((await api('/stream/agent/status')).status, 403);
+  const agentView = await api('/stream/agent/status', { agent: true });
+  assert.equal(agentView.status, 200);
+  assert.equal(agentView.body.available, true);
+  assert.equal(agentView.body.policy.autonomous, 'off');
+  assert.equal(agentView.body.lastIntentId, null);
+  assert.ok(!JSON.stringify(agentView.body).includes('secret-key'));
+  assert.ok(!JSON.stringify(agentView.body).includes('rtmpUrl'));
+  assert.ok(!JSON.stringify(agentView.body).includes('agent-test'));
   const policy = await api('/stream/policy', { owner: true });
   assert.equal(policy.body.autonomous, 'off');
   assert.deepEqual(policy.body.rooms, ['default']);

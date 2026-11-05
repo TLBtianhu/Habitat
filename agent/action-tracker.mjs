@@ -10,27 +10,28 @@ export class ActionTracker {
     this.verifiers = new Map();
   }
 
-  register(kind, verify, references = () => ({})) {
-    this.verifiers.set(kind, { verify, references });
+  register(kind, verify, references = () => ({}), { recordSkill = true, allowDuplicateRun = true } = {}) {
+    this.verifiers.set(kind, { verify, references, recordSkill, allowDuplicateRun });
   }
 
-  async track({ kind, args = {}, residenceId = 'system', run }) {
+  async track({ kind, args = {}, residenceId = 'system', initialRefs = null, run }) {
     const registration = this.verifiers.get(kind);
     if (!registration) throw new Error('action verifier not registered: ' + kind);
     const idempotencyKey = args.idempotencyKey || null;
     if (idempotencyKey) {
       const existing = this.episode.pendingWrites.find((write) => write.data?.idempotencyKey === idempotencyKey && write.status !== 'duplicate');
       if (existing) {
-        const result = await run();
         const report = this.afterAction.list().filter((item) => item.taskId === existing.id).at(-1) || null;
+        if (!registration.allowDuplicateRun) return { result: null, afterAction: report, deduped: true };
+        const result = await run();
         return { result, afterAction: report, deduped: true };
       }
     }
-    const write = this.episode.addPendingWrite(kind, { args, residenceId, idempotencyKey });
+    const write = this.episode.addPendingWrite(kind, { args, residenceId, idempotencyKey, refs: initialRefs ? { ...initialRefs } : {} });
     this.episodeStore.save(this.episode);
     try {
       const result = await run();
-      write.data.refs = registration.references(result) || {};
+      write.data.refs = { ...(write.data.refs || {}), ...(registration.references(result, write) || {}) };
       this.episodeStore.save(this.episode);
       const checks = await registration.verify(write, result);
       const report = this._finish(write, checks);
@@ -51,7 +52,8 @@ export class ActionTracker {
     });
     this.episode.resolveWrite(write.id, { outcome: report.verification.outcome, reportId: report.id });
     this.episodeStore.save(this.episode);
-    if (report.verification.outcome === 'verified_success') {
+    const registration = this.verifiers.get(write.kind);
+    if (report.verification.outcome === 'verified_success' && registration?.recordSkill !== false) {
       this.skillLibrary?.record({ episode: this.episode, write, report });
     }
     return report;
@@ -84,7 +86,8 @@ export class ActionTracker {
         if (existing) {
           this.episode.resolveWrite(write.id, { outcome: existing.verification.outcome, reportId: existing.id });
           this.episodeStore.save(this.episode);
-          if (existing.verification.outcome === 'verified_success') this.skillLibrary?.record({ episode: this.episode, write, report: existing });
+          const registration = this.verifiers.get(write.kind);
+          if (existing.verification.outcome === 'verified_success' && registration?.recordSkill !== false) this.skillLibrary?.record({ episode: this.episode, write, report: existing });
           changed++;
           continue;
         }

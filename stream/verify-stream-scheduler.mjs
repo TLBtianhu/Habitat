@@ -88,18 +88,32 @@ try {
   };
   const agentStart = await scheduler.propose({ action: 'start', actor: 'agent', maxDurationMs: 60000 });
   assert.equal(agentStart.state, 'starting');
+  assert.equal(agentStart.lastActor, 'agent');
   assert.equal(starts, 2);
   const agentLive = await scheduler.tick();
   assert.equal(agentLive.state, 'live');
   const agentStop = await scheduler.propose({ action: 'stop', actor: 'agent', intentId: agentLive.lastIntentId });
   assert.equal(agentStop.state, 'stopped');
   assert.equal(agentStop.stopReason, 'agent');
+  const runsBeforeReplay = starts;
+  const replay = await scheduler.propose({ action: 'start', actor: 'agent', intentId: agentStart.lastIntentId });
+  assert.equal(replay.reason, 'duplicate_intent');
+  assert.equal(replay.deduped, true);
+  assert.equal(starts, runsBeforeReplay, '同一 intent 重启不得再次推流');
   const agentStoppedAt = scheduler.lastStoppedAt;
   policyStore.save({ autonomous: 'off', cooldownMs: 600000 });
   assert.equal(scheduler.status().cooldownUntil, agentStoppedAt + 600000, '临时 0 冷却验收后必须恢复当前策略的实际冷却');
   policyStore.save({ autonomous: 'anytime', cooldownMs: 0 });
   const forbidden = await scheduler.propose({ action: 'stop', actor: 'agent', intentId: 'wrong' });
   assert.equal(forbidden.reason, 'forbidden');
+
+  const ownerSession = await scheduler.start({ actor: 'owner', intentId: 'owner-only-session', maxDurationMs: 60000 });
+  assert.equal(ownerSession.lastActor, 'owner');
+  const ownerStopsBefore = stops;
+  const ownerStopDenied = await scheduler.propose({ action: 'stop', actor: 'agent', intentId: ownerSession.lastIntentId });
+  assert.equal(ownerStopDenied.reason, 'forbidden');
+  assert.equal(stops, ownerStopsBefore, 'Agent 不得停止 Owner 的会话');
+  await scheduler.stop({ actor: 'owner' });
 
   await scheduler.start({ actor: 'owner', maxDurationMs: 1000 });
   now += 1000;
@@ -135,6 +149,14 @@ try {
   await scheduler.stop({ actor: 'owner' });
   const coolingAgain = await scheduler.propose({ action: 'start', actor: 'agent' });
   assert.equal(coolingAgain.state, 'scheduled');
+  const scheduledIntentId = coolingAgain.pending.intentId;
+  const startsBeforeCancel = starts;
+  const cancelled = await scheduler.propose({ action: 'stop', actor: 'agent', intentId: scheduledIntentId });
+  assert.equal(cancelled.state, 'stopped');
+  assert.equal(cancelled.stopReason, 'agent');
+  assert.equal(starts, startsBeforeCancel, 'Agent 可取消自己的 scheduled 意图，但不能启动输出');
+  const rescheduled = await scheduler.propose({ action: 'start', actor: 'agent' });
+  assert.equal(rescheduled.state, 'scheduled');
   now += 10000;
   await scheduler.tick();
   assert.equal(starts >= 5, true);
@@ -159,6 +181,23 @@ try {
   const windowLive = await scheduler.tick();
   assert.equal(windowLive.state, 'live');
   await scheduler.stop({ actor: 'owner' });
+
+  const activeSchedulerFile = process.env.HABITAT_STREAM_SCHEDULER_FILE;
+  process.env.HABITAT_STREAM_SCHEDULER_FILE = path.join(root, 'scheduled-restart.json');
+  const candidate = new StreamScheduler({ scenePreview, policyStore, now: () => now, tickMs: 60000 });
+  now = new Date('2026-11-07T11:00:00Z').getTime();
+  const scheduled = await candidate.propose({ action: 'start', actor: 'agent' });
+  assert.equal(scheduled.state, 'scheduled');
+  const startsBeforeRestart = starts;
+  const rebooted = new StreamScheduler({ scenePreview, policyStore, now: () => now, tickMs: 60000 });
+  assert.equal(rebooted.state, 'interrupted');
+  assert.equal(rebooted.pending, null, '重启必须隔离 scheduled 意图');
+  await rebooted.tick();
+  assert.equal(starts, startsBeforeRestart, '重启后的只读 tick 不得执行 scheduled 开播');
+  await rebooted.stop({ actor: 'owner' });
+  candidate.stopTimer();
+  rebooted.stopTimer();
+  process.env.HABITAT_STREAM_SCHEDULER_FILE = activeSchedulerFile;
   console.log('ok: StreamScheduler off/owner/agent、冷却、单次/每日时长、验证失败、时间窗和强制停止');
 } finally {
   await scheduler.stop({ actor: 'owner' }).catch(() => {});

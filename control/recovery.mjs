@@ -7,11 +7,12 @@ import { SkillLibrary } from '../agent/skill-library.mjs';
 import { ActionTracker } from '../agent/action-tracker.mjs';
 
 export class RecoveryManager {
-  constructor({ file = process.env.HABITAT_LIFECYCLE_FILE || '/var/lib/habitat/lifecycle.json', episodeStore = null, afterAction = null, skillLibrary = null } = {}) {
+  constructor({ file = process.env.HABITAT_LIFECYCLE_FILE || '/var/lib/habitat/lifecycle.json', episodeStore = null, afterAction = null, skillLibrary = null, streamStatus = null } = {}) {
     this.file = file;
     this.episodeStore = episodeStore;
     this.afterAction = afterAction;
     this.skillLibrary = skillLibrary;
+    this.streamStatus = streamStatus;
   }
 
   _stores() {
@@ -51,6 +52,9 @@ export class RecoveryManager {
   status() {
     const record = this._read();
     const pending = this._pending();
+    const stream = this.streamStatus?.() || null;
+    const streamAttention = stream?.state === 'interrupted'
+      || ['starting', 'running', 'stopping', 'reconnecting'].includes(stream?.output?.state);
     return {
       state: record.state,
       bootId: record.bootId || 0,
@@ -58,9 +62,15 @@ export class RecoveryManager {
       readyAt: record.readyAt || null,
       lastCleanShutdownAt: record.lastCleanShutdownAt || null,
       lastShutdownAbnormal: !!record.lastShutdownAbnormal,
-      recoveryRequired: !!record.recoveryRequired || pending.total > 0,
+      recoveryRequired: !!record.recoveryRequired || pending.total > 0 || streamAttention,
       pendingWrites: pending.counts,
       lastRecovery: record.lastRecovery || null,
+      stream: stream ? {
+        state: stream.state,
+        outputState: stream.output?.state || 'stopped',
+        live: stream.live === true,
+        requiresAttention: streamAttention,
+      } : null,
     };
   }
 
@@ -107,6 +117,11 @@ export class RecoveryManager {
       afterAction: this.afterAction,
       skillLibrary: this.skillLibrary,
     });
+    // stream 证据由 Agent 单一写入者核对；Control 只消费已有报告，不并发验证或学习开播技能。
+    tracker.register('stream.propose',
+      async () => [{ name: 'agent_reconcile_required', ok: null, evidence: 'deferred_to_agent_single_writer' }],
+      () => ({}),
+      { recordSkill: false, allowDuplicateRun: false });
     return tracker.reconcile({ minIntervalMs: 0 }).then((changed) => {
       const record = this._read();
       return this._write({
