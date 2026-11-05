@@ -36,6 +36,12 @@ export function agentStreamStatus(status, policy) {
       state: status.output?.state || 'stopped',
       frames: status.output?.frames || 0,
       lastError: status.output?.lastError || null,
+      writtenFrames: status.output?.writtenFrames || 0,
+      duplicatedFrames: status.output?.duplicatedFrames || 0,
+      droppedFrames: status.output?.droppedFrames || 0,
+      standbyFrames: status.output?.standbyFrames || 0,
+      lastWriteAt: status.output?.lastWriteAt || null,
+      lastFrameAgeMs: status.output?.lastFrameAgeMs ?? null,
     },
     verification: {
       state: status.verification?.state || 'stopped',

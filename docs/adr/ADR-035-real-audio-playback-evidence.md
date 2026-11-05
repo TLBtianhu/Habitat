@@ -1,7 +1,7 @@
 # ADR-035：真实 Voice PCM 音轨与独立音频播放证据
 
 日期：2026-11-05
-状态：Accepted（实现与隔离测试通过；生产稳定性结果见测试记录）
+状态：Accepted（调度与音视频证据通过；观看节奏问题由 ADR-036 跟进）
 
 ## 背景
 
@@ -45,6 +45,10 @@
 
 - 2026-11-05 本地修复：Voice 服务账号无法写入 root:root 700 的实例 `tmp`，已改为服务账号所有权；真实 Kokoro 随后成功生成 ready WAV。通用测试音色不视为大肥鱼正式音色。
 - 首轮生产尝试中，真实 PCM capture 和测试 utterance 均成功，但 B 站房间持续 `liveStatus=0`、播放地址 404，未进入 LIVE，未获得音频播放证据，已停止输出与 capture。该轮不计为稳定性通过，需使用新的有效推流会话参数重试。
+- 随后使用新 `trid` 完成 15 分钟真实验收：Owner 会话从 `startedAt=1793851579853` 到 `lastStoppedAt=1793852484089`（调度 tick 容差内约 15 分钟），共 2758 帧、54 条观察事件，未发生重连。公开播放端确认 `liveStatus=1`、视频解码成功、AAC 音频解码成功；首次非静音证据为 `audioVerifiedAt=1793851611377`、`audioEvidenceMaxVolumeDb=-6.2`。该证据关联测试 utterance 16，但不据此声称语义转写或正式大肥鱼音色。
+- 最终 `stopReason=max_duration`，输出和全部音频 capture 均停止，`autonomous=off`，冷却截止时间为 `lastStoppedAt + 600000ms`。证据保存在 `data/artifacts/stream-stability-latest.json` 与 `stream-stability-first-audio.json`，本地 PCM 对照保存在 `local-pcm-evidence.json`，均不含推流码。
+- 验收后保留 `HABITAT_BILIBILI_AUDIO=mixer` 作为真实音轨，恢复 `HABITAT_PLAYBACK_REQUIRE_AUDIO=0`，避免后续正常开播被强制要求先播放测试语音；需要再次证明非静音时可显式开启测试模式并生成新的短句。
+- 用户实际观看时仍频繁出现“正在缓冲”，因此本次结果只证明调度、音视频证据和自动停止，不代表观看节奏稳定。后续按 ADR-036 的 OBS 时间戳调查与墙钟帧节奏修复重新验收。
 - `stream/verify-audio-playback.mjs`：PCM 参数、显式映射、重连/启动失败清理、ScenePreview factory 传播、无音轨拒绝、非静音阈值、后续正常静音和峰值保留。
 - `voice/verify-kokoro-backend.mjs`：模型文件与输出目录可写性。
 - 原有 RTMP reconnect、PlaybackVerifier、StreamScheduler、ScenePreview 和 AgentLoop 测试必须保持通过。

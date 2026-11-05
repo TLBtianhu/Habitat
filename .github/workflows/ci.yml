@@ -63,6 +63,7 @@ jobs:
           node stream/verify-network-policy.mjs
           node stream/verify-stream-scheduler.mjs
           node stream/verify-audio-playback.mjs
+          node stream/verify-paced-video-input.mjs
           node voice/verify-kokoro-backend.mjs
           node control/verify-scene-preview.mjs
           node control/verify-bilibili-settings.mjs

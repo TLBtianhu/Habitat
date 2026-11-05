@@ -2,9 +2,10 @@
 import { spawn } from 'node:child_process';
 import { buildBilibiliTarget } from '../bilibili-live-config.mjs';
 import { RtmpNetworkPolicy } from '../network-policy.mjs';
+import { PacedVideoInput } from '../paced-video-input.mjs';
 
 export class BilibiliRtmpOutput {
-  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none', audioCapture = null, network = null }) {
+  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none', audioCapture = null, network = null, pacing = true, now = () => Date.now() }) {
     if (!target) throw new Error('Bilibili target required');
     if (/^rtmps?:\/\//.test(target) && !streamKey) throw new Error('Bilibili streamKey required');
     this.target = buildBilibiliTarget(target, streamKey);
@@ -35,6 +36,10 @@ export class BilibiliRtmpOutput {
     this.stderrTail = '';
     this.network = network || new RtmpNetworkPolicy();
     this.transportClose = null;
+    this.pacing = pacing;
+    this.now = now;
+    this.videoInput = null;
+    this.lastVideoMetrics = null;
   }
 
   redact(text) {
@@ -52,6 +57,7 @@ export class BilibiliRtmpOutput {
       state: this.state,
       audio: this.audio,
       audioCaptureId: this.audioSession?.id || null,
+      ...(this.videoInput?.status() || this.lastVideoMetrics || { writtenFrames: 0, duplicatedFrames: 0, droppedFrames: 0, standbyFrames: 0, lastWriteAt: null, lastFrameAgeMs: null }),
       frames: this.frames,
       lastSeq: this.lastSeq,
       lastPtsMs: this.lastPtsMs,
@@ -124,7 +130,12 @@ export class BilibiliRtmpOutput {
       throw error;
     }
     this.child = child;
-    this.child.once('spawn', () => { if (this.enabled) this.state = 'running'; });
+    this.child.once('spawn', () => {
+      if (this.enabled) {
+        this.state = 'running';
+        this.startVideoInput();
+      }
+    });
     this.child.stderr?.on('data', (chunk) => {
       this.stderrTail = (this.stderrTail + chunk.toString()).slice(-4000);
     });
@@ -135,6 +146,30 @@ export class BilibiliRtmpOutput {
     this.child.once('exit', (code) => this.handleExit(code));
     this.state = 'starting';
     return this.status();
+  }
+
+  startVideoInput() {
+    if (!this.pacing || this.videoInput) return;
+    this.lastVideoMetrics = null;
+    this.videoInput = new PacedVideoInput({
+      fps: this.fps,
+      now: this.now,
+      write: (data) => this.writeVideoFrame(data),
+      onError: (error) => {
+        if (this.enabled && this.state === 'running') {
+          this.lastError = this.redact(error.message);
+          this.state = 'degraded';
+        }
+      },
+    });
+    this.videoInput.start();
+  }
+
+  stopVideoInput() {
+    const input = this.videoInput;
+    if (input) this.lastVideoMetrics = input.status();
+    this.videoInput = null;
+    input?.stop();
   }
 
   async closeAudioSession() {
@@ -152,6 +187,7 @@ export class BilibiliRtmpOutput {
   handleExit(code) {
     this.exitCode = code;
     this.child = null;
+    this.stopVideoInput();
     void this.closeTransport().catch(() => {});
     const intentional = this.state === 'stopping' || this.state === 'stopped';
     if (intentional) {
@@ -178,23 +214,30 @@ export class BilibiliRtmpOutput {
     }
   }
 
-  async push(packet) {
-    if (this.state !== 'running' || !this.child?.stdin?.writable) throw new Error('Bilibili output is not running');
+  async writeVideoFrame(data) {
+    const child = this.child;
+    if (this.state !== 'running' || !child?.stdin?.writable) throw new Error('Bilibili output is not running');
     await new Promise((resolve, reject) => {
       const onError = (error) => { cleanup(); reject(error); };
       const onDrain = () => { cleanup(); resolve(); };
       const cleanup = () => {
-        this.child.stdin.off('error', onError);
-        this.child.stdin.off('drain', onDrain);
+        child.stdin.off('error', onError);
+        child.stdin.off('drain', onDrain);
       };
-      this.child.stdin.once('error', onError);
-      this.child.stdin.once('drain', onDrain);
-      const accepted = this.child.stdin.write(packet.data);
+      child.stdin.once('error', onError);
+      child.stdin.once('drain', onDrain);
+      const accepted = child.stdin.write(data);
       if (accepted) {
         cleanup();
         resolve();
       }
     });
+  }
+
+  async push(packet) {
+    if (this.state !== 'running' || !this.child?.stdin?.writable) throw new Error('Bilibili output is not running');
+    if (!this.pacing) await this.writeVideoFrame(packet.data);
+    else this.videoInput.offer(packet);
     this.frames += 1;
     this.lastSeq = packet.seq;
     this.lastPtsMs = packet.ptsMs;
@@ -209,6 +252,7 @@ export class BilibiliRtmpOutput {
 
   async stop() {
     this.enabled = false;
+    this.stopVideoInput();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
     this.retryAt = null;
