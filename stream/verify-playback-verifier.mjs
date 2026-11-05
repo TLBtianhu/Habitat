@@ -45,6 +45,16 @@ try {
   const recovered = await verifier.verifyNow();
   assert.equal(recovered.verified, true);
   assert.equal(recovered.lastError, null);
+  let finishNextDecode;
+  verifier.decoder = () => new Promise((resolve) => { finishNextDecode = resolve; });
+  const checking = verifier.verifyNow();
+  await new Promise((resolve) => setImmediate(resolve));
+  const duringCheck = verifier.status();
+  assert.equal(duringCheck.state, 'verified', '扫描期间的新鲜成功证据不能立即降级');
+  assert.equal(duringCheck.verified, true);
+  assert.equal(duringCheck.checkInFlight, true);
+  finishNextDecode(true);
+  await checking;
   verifier.decoder = async () => { throw new Error('transient'); };
   const transient = await verifier.verifyNow();
   assert.equal(transient.verified, true);

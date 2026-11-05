@@ -61,6 +61,13 @@ try {
   output = { state: 'running', lastError: null };
   verification = { ...verification, state: 'verified', verified: true, playbackDecoded: true };
 
+  // 单次探测失败不应抹掉仍在 TTL 内的成功播放证据。
+  verification = { ...verification, playbackDecoded: false };
+  const transientEvidence = scheduler.status();
+  assert.equal(transientEvidence.state, 'live');
+  assert.equal(transientEvidence.live, true);
+  verification = { ...verification, playbackDecoded: true };
+
   // 验证 await 期间的 owner 停止必须排队执行，不能返回旧状态并留下推流进程。
   let finishVerification;
   scenePreview.verifyBilibili = () => new Promise((resolve) => { finishVerification = resolve; });

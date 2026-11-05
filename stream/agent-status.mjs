@@ -50,6 +50,7 @@ export function agentStreamStatus(status, policy) {
       lastVerifiedAt: status.verification?.lastVerifiedAt || null,
       liveStatus: status.verification?.liveStatus ?? null,
       playbackDecoded: status.verification?.playbackDecoded === true,
+      checkInFlight: status.verification?.checkInFlight === true,
       requireAudio: status.verification?.requireAudio === true,
       audioDecoded: status.verification?.audioDecoded === true,
       audioVerifiedAt: status.verification?.audioVerifiedAt || null,

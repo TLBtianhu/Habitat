@@ -93,7 +93,11 @@ export class PlaybackVerifier {
   status() {
     const output = this.outputStatus() || { state: 'stopped' };
     if (output.state === 'stopped') return { ...this.snapshot('stopped', false), outputState: 'stopped' };
-    if (this.state === 'checking') return { ...this.snapshot('checking', false), outputState: output.state };
+    if (this.state === 'checking') {
+      const hasFreshEvidence = this.lastVerifiedAt && this.now() - this.lastVerifiedAt <= this.ttlMs && output.state === 'running';
+      if (hasFreshEvidence) return { ...this.snapshot('verified', true), outputState: output.state };
+      return { ...this.snapshot('checking', false), outputState: output.state };
+    }
     if (this.state === 'verified' && this.lastVerifiedAt && this.now() - this.lastVerifiedAt <= this.ttlMs && output.state === 'running') {
       return { ...this.snapshot('verified', true), outputState: output.state };
     }
@@ -110,6 +114,7 @@ export class PlaybackVerifier {
       lastError: this.lastError,
       liveStatus: this.liveStatus,
       playbackDecoded: this.playbackDecoded,
+      checkInFlight: this.state === 'checking',
       requireAudio: this.requireAudio,
       audioDecoded: this.audioDecoded,
       audioVerifiedAt: this.audioVerifiedAt,

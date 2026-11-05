@@ -114,9 +114,10 @@ export class StreamScheduler {
     const output = this.scenePreview.status().bilibili || { state: 'stopped', lastError: null };
     const verification = this.scenePreview.status().verification || { state: 'stopped', lastCheckedAt: null, lastVerifiedAt: null, lastError: null };
     const network = this.scenePreview.status().network || { mode: 'direct', supported: true, lastResult: 'unknown', lastError: null };
+    const freshVerification = verification.lastVerifiedAt
+      && this.now() - verification.lastVerifiedAt <= (verification.ttlMs || 45000);
     const live = this.state === 'live' && output.state === 'running'
-      && verification.state === 'verified' && verification.verified === true
-      && verification.playbackDecoded === true && Boolean(verification.lastVerifiedAt);
+      && verification.state === 'verified' && verification.verified === true && freshVerification;
     const state = this.state !== 'live' || live ? this.state
       : output.state === 'reconnecting' ? 'reconnecting'
         : ['failed', 'degraded'].includes(output.state) ? 'degraded'
@@ -372,9 +373,10 @@ export class StreamScheduler {
         const verification = await this.scenePreview.verifyBilibili();
         if (this.stopRequests.length) return this.status();
         const currentOutput = this.scenePreview.status().bilibili || { state: 'stopped' };
+        const freshVerification = verification.lastVerifiedAt
+          && this.now() - verification.lastVerifiedAt <= (verification.ttlMs || 45000);
         if (verification.state === 'verified' && verification.verified === true
-          && verification.playbackDecoded === true && verification.lastVerifiedAt
-          && currentOutput.state === 'running') {
+          && freshVerification && currentOutput.state === 'running') {
           this.state = 'live';
           this.lastError = verification.lastError || null;
         } else if (verification.state === 'degraded' && this.now() - this.startedAt >= policy.verificationTimeoutMs && policy.stopOnEvidenceFailure && policy.requireVerified) {

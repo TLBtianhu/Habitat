@@ -19,7 +19,7 @@
 
 - `starting` 表示输出已启动但还没有足够播放证据。
 - `live` 只能由当前输出仍为 `running`、且独立 `PlaybackVerifier` 本轮真实解码成功的证据产生，不能由 FFmpeg 启动、TCP 可达或旧证据推断。
-- `verification.state=verified`、`verified=true`、`playbackDecoded=true` 和 `lastVerifiedAt` 必须同时成立；重连、检查中、过期和已停止证据一律不是 LIVE。
+- `verification.state=verified`、`verified=true` 和新鲜的 `lastVerifiedAt` 必须同时成立；重连、过期和已停止证据一律不是 LIVE。`playbackDecoded` 只表示最近一次探测是否成功，不能用它单独否定 TTL 内已经取得的有效播放证据。
 - `lastVerifiedAt` 只表示某次成功解码的历史时间，不是永久有效的开播凭证。
 - `requiresRefresh` 在播放/输出/网络失败、过期或调度重启后提示更新；agent 不得在此状态自主启动。
 - `lastCheckedAt`、`lastVerifiedAt`、`startedAt`、`lastStoppedAt`、`cooldownUntil`、`dailyMs`、`stopReason`、`lastIntentId` 和 `lastError` 用于审计。

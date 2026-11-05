@@ -120,8 +120,7 @@ export async function streamProposalChecks(write, result, { readStatus }) {
   const sameStart = expectedStartedAt ? status.startedAt === expectedStartedAt : status.startedAt >= write.at;
   const currentLive = Boolean(identity && status.state === 'live' && status.live === true
     && status.output?.state === 'running' && status.verification?.state === 'verified'
-    && status.verification?.verified === true && status.verification?.playbackDecoded === true
-    && firstVerifiedLiveAt && sameStart);
+    && status.verification?.verified === true && firstVerifiedLiveAt && sameStart);
   const stoppedAt = status.lastStoppedAt || write.data?.refs?.lastStoppedAt || null;
   const stoppedAfterStart = expectedStartedAt ? stoppedAt >= expectedStartedAt : stoppedAt >= write.at;
   const historicalLive = Boolean(identity && firstVerifiedLiveAt && status.state === 'stopped'
