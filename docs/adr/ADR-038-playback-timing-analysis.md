@@ -19,6 +19,7 @@
   - 音视频起始时间差和持续时长差；
   - `mediaToWallRatio` 仅供分析，不作为健康阈值。
 - 初始警报：`video_gap_over_2000ms`、`av_start_skew_over_500ms`、`av_span_skew_over_500ms`、非单调音视频时间戳。警报是观察信号，不单独证明或否认播放器缓冲。
+- `sample.videoUsable` 要求至少 2 个视频帧且有正时长；`sample.avUsable` 还要求至少 2 个音频帧且有正时长。混音输出要求音频证据，缺帧时使用 `insufficient_video_frames` / `insufficient_audio_frames`，不得把单帧或缺失音轨当成完整节奏通过。
 - `POST /bilibili/live/timing` 只允许 Owner 主动调用，且仅在输出 running 时执行；不调用 `tick()`，不自动开播，不返回播放 URL 或推流码。
 
 ## 本地真实验证

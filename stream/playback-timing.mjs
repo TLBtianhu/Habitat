@@ -28,14 +28,19 @@ function series(frames, type) {
   };
 }
 
-export function analyzePlaybackFrames(frames, { wallDurationMs = null, requireAudio = false } = {}) {
+export function analyzePlaybackFrames(frames, { wallDurationMs = null, requireAudio = false, expectAudio = requireAudio } = {}) {
   const video = series(frames, 'video');
   const audio = series(frames, 'audio');
   if (!video.frames) throw new Error('video frames missing');
   if (requireAudio && !audio.frames) throw new Error('audio frames missing');
+  const videoUsable = video.frames >= 2 && video.spanMs > 0;
+  const audioUsable = audio.frames >= 2 && audio.spanMs > 0;
+  const avUsable = videoUsable && audioUsable;
   const startSkewMs = audio.frames ? Math.abs(video.firstMs - audio.firstMs) : null;
   const spanSkewMs = audio.frames ? Math.abs(video.spanMs - audio.spanMs) : null;
   const alerts = [];
+  if (!videoUsable) alerts.push('insufficient_video_frames');
+  if (expectAudio && !audioUsable) alerts.push('insufficient_audio_frames');
   if (video.nonMonotonicCount) alerts.push('non_monotonic_video_timestamps');
   if (audio.nonMonotonicCount) alerts.push('non_monotonic_audio_timestamps');
   if (video.maxGapMs !== null && video.maxGapMs > 2000) alerts.push('video_gap_over_2000ms');
@@ -50,11 +55,12 @@ export function analyzePlaybackFrames(frames, { wallDurationMs = null, requireAu
     mediaDurationMs,
     wallDurationMs,
     mediaToWallRatio: wallDurationMs > 0 ? mediaDurationMs / wallDurationMs : null,
+    sample: { videoUsable, avUsable, audioExpected: expectAudio === true },
     alerts,
   };
 }
 
-export async function probePlaybackTiming(url, { timeoutMs = 30000, durationMs = 6000, spawnImpl = spawn, requireAudio = false, captureFile = null } = {}) {
+export async function probePlaybackTiming(url, { timeoutMs = 30000, durationMs = 6000, spawnImpl = spawn, requireAudio = false, expectAudio = requireAudio, captureFile = null } = {}) {
   const startedAt = Date.now();
   const temporary = captureFile ? null : fs.mkdtempSync(path.join(os.tmpdir(), 'habitat-playback-timing-'));
   const file = captureFile || path.join(temporary, 'sample.flv');
@@ -82,7 +88,7 @@ export async function probePlaybackTiming(url, { timeoutMs = 30000, durationMs =
     const wallDurationMs = Date.now() - startedAt;
     const probed = await run('ffprobe', ['-v', 'error', '-show_frames', '-show_entries', 'frame=media_type,best_effort_timestamp_time,pkt_dts_time,pkt_duration_time', '-of', 'json', '-i', file]);
     const data = JSON.parse(probed.stdout);
-    return analyzePlaybackFrames(data.frames || [], { wallDurationMs, requireAudio });
+    return analyzePlaybackFrames(data.frames || [], { wallDurationMs, requireAudio, expectAudio });
   } finally {
     if (temporary) fs.rmSync(temporary, { recursive: true, force: true });
   }

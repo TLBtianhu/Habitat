@@ -26,6 +26,11 @@ assert.ok(analysis.alerts.includes('non_monotonic_video_timestamps'));
 assert.ok(analysis.alerts.includes('av_span_skew_over_500ms'));
 assert.equal(analysis.mediaToWallRatio, 1.1);
 assert.throws(() => analyzePlaybackFrames([{ media_type: 'video', best_effort_timestamp_time: '0' }], { requireAudio: true }), /audio frames missing/);
+const insufficient = analyzePlaybackFrames([{ media_type: 'video', best_effort_timestamp_time: '0' }], { expectAudio: true });
+assert.deepEqual([...insufficient.alerts].sort(), ['insufficient_audio_frames', 'insufficient_video_frames']);
+assert.equal(insufficient.sample.videoUsable, false);
+assert.equal(insufficient.sample.avUsable, false);
+assert.equal(insufficient.sample.audioExpected, true);
 
 const toolsAvailable = ['ffmpeg', 'ffprobe'].every((command) => spawnSync(command, ['-version'], { stdio: 'ignore' }).status === 0);
 if (!toolsAvailable) {
@@ -57,6 +62,8 @@ if (!toolsAvailable) {
     const real = await probePlaybackTiming(file, { requireAudio: true });
     assert.ok(real.video.frames > 0);
     assert.ok(real.audio?.frames > 0);
+    assert.equal(real.sample.videoUsable, true);
+    assert.equal(real.sample.avUsable, true);
     assert.ok(real.video.intervalP50Ms > 100 && real.video.intervalP50Ms < 350);
     assert.ok(real.video.maxGapMs < 2000);
     assert.equal(real.video.nonMonotonicCount, 0);

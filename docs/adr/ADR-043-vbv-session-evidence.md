@@ -1,7 +1,7 @@
 # ADR-043：有界 VBV 与编码会话证据
 
 日期：2026-11-05
-状态：实现与本地验证通过，公开短验证待进行
+状态：Accepted（本地与公开 VBV 验证通过；附带节奏样本不足已标记）
 
 ## 背景
 
@@ -34,3 +34,5 @@
 这些验证只证明参数和证据正确，不证明公开网络没有拥塞。公开验证仍需有效会话，且 `autonomous=off` 不变。
 
 2026-11-05 的首次公开短测中，播放地址持续 404，未进入 LIVE，最终 `verification_failed`；输出已停止。该次会话仍正确产生 VBV 状态和 3 个独立的编码会话记录，但不能作为公开播放验收。需要使用新的有效推流会话重试，不能据此判断 VBV 对观看端的效果。
+
+随后使用有效会话完成 90 秒公开验证：`rateControl=vbv`、`maxRateKbps=3500`、`vbvBufferKbps=7000`，进入真实 LIVE，最终 `stopReason=max_duration`，`reconnectCount=0`。完整会话持续 94106ms，写入 450 帧、重复 165 帧、无调度丢帧，进度输出时间为 88234.667ms，会话退出按 owner_stop 记录，调度停止原因按 max_duration 记录。附带播放样本只有 1 个视频帧且没有音频帧，修正后的分析器将其标为 `insufficient_video_frames` 和 `insufficient_audio_frames`，`sample.videoUsable=false`、`sample.avUsable=false`，不把该样本当成节奏验收通过。证据保存在 `data/artifacts/stream-vbv-short.json`。
