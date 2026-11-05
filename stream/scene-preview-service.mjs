@@ -68,7 +68,7 @@ export class ScenePreviewService {
     }
     if (!this.bilibili) {
       const options = { ...config, network: this.network, audio: this.bilibiliAudio, audioCapture: this.audioCapture };
-      this.bilibili = this.bilibiliFactory ? this.bilibiliFactory(options) : new BilibiliRtmpOutput({ target: options.rtmpUrl, streamKey: options.streamKey, network: options.network, audio: options.audio, audioCapture: options.audioCapture });
+      this.bilibili = this.bilibiliFactory ? this.bilibiliFactory(options) : new BilibiliRtmpOutput({ target: options.rtmpUrl, streamKey: options.streamKey, network: options.network, audio: options.audio, audioCapture: options.audioCapture, rateControl: process.env.HABITAT_BILIBILI_RATE_CONTROL || 'vbv' });
       this.recorder.outputs.set('bilibili', this.bilibili);
     }
     await this.recorder.startOutput('bilibili');

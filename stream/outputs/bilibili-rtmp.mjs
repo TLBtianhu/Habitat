@@ -5,8 +5,23 @@ import { buildBilibiliTarget } from '../bilibili-live-config.mjs';
 import { RtmpNetworkPolicy } from '../network-policy.mjs';
 import { PacedVideoInput } from '../paced-video-input.mjs';
 
+function bitrateKbps(value, name = 'bitrate') {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) return Math.round(value / 1000);
+  const match = /^(\d+(?:\.\d+)?)([km])?$/i.exec(String(value).trim());
+  if (!match) throw new Error(`${name} must be a positive bitrate`);
+  const amount = Number(match[1]) * (match[2]?.toLowerCase() === 'm' ? 1000 : match[2]?.toLowerCase() === 'k' ? 1 : 1 / 1000);
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error(`${name} must be a positive bitrate`);
+  return Math.max(1, Math.round(amount));
+}
+
+function optionalKbps(value, name) {
+  if (value === null || value === undefined) return null;
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${name} must be positive`);
+  return Math.round(value);
+}
+
 export class BilibiliRtmpOutput {
-  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none', audioCapture = null, network = null, pacing = true, now = () => performance.now(), wallNow = () => Date.now() }) {
+  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', rateControl = 'vbv', maxRateKbps = null, vbvBufferKbps = null, spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none', audioCapture = null, network = null, pacing = true, now = () => performance.now(), wallNow = () => Date.now() }) {
     if (!target) throw new Error('Bilibili target required');
     if (/^rtmps?:\/\//.test(target) && !streamKey) throw new Error('Bilibili streamKey required');
     this.target = buildBilibiliTarget(target, streamKey);
@@ -14,6 +29,13 @@ export class BilibiliRtmpOutput {
     this.ffmpeg = ffmpeg;
     this.fps = fps;
     this.bitrate = bitrate;
+    const targetKbps = bitrateKbps(bitrate);
+    if (!['abr', 'vbv'].includes(rateControl)) throw new Error('rateControl must be abr or vbv');
+    const maxKbps = maxRateKbps === null ? targetKbps : optionalKbps(maxRateKbps, 'maxRateKbps');
+    const bufferKbps = vbvBufferKbps === null ? maxKbps * 2 : optionalKbps(vbvBufferKbps, 'vbvBufferKbps');
+    if (maxKbps < targetKbps) throw new Error('maxRateKbps must not be lower than bitrate');
+    if (bufferKbps < maxKbps) throw new Error('vbvBufferKbps must not be lower than maxRateKbps');
+    this.rateControl = { mode: rateControl, targetKbps, maxRateKbps: rateControl === 'vbv' ? maxKbps : null, vbvBufferKbps: rateControl === 'vbv' ? bufferKbps : null };
     this.spawn = spawnImpl;
     this.stopTimeoutMs = stopTimeoutMs;
     this.reconnectEnabled = reconnect;
@@ -49,6 +71,38 @@ export class BilibiliRtmpOutput {
     this.lastReconnectDurationMs = null;
     this.progress = { muxFrame: 0, muxFps: 0, outTimeMs: 0, outSizeBytes: 0, muxSpeed: null, muxDupFrames: 0, muxDropFrames: 0, muxBitrateKbps: null };
     this.lastKnownProgress = null;
+    this.sessionSequence = 0;
+    this.activeSession = null;
+    this.recentSessions = [];
+  }
+
+  beginSession() {
+    this.sessionSequence += 1;
+    this.activeSession = {
+      id: this.sessionSequence,
+      startedAt: this.wallNow(),
+      stoppedAt: null,
+      durationMs: null,
+      stopReason: null,
+      exitCode: null,
+      lastError: null,
+      video: null,
+      progress: null,
+    };
+  }
+
+  finishSession(stopReason, exitCode, lastError) {
+    const session = this.activeSession;
+    if (!session) return;
+    session.stoppedAt = this.wallNow();
+    session.durationMs = Math.max(0, session.stoppedAt - session.startedAt);
+    session.stopReason = stopReason;
+    session.exitCode = exitCode;
+    session.lastError = lastError;
+    session.video = this.lastVideoMetrics ? { ...this.lastVideoMetrics } : null;
+    session.progress = { ...this.progress };
+    this.recentSessions = [...this.recentSessions.filter((item) => item.id !== session.id), session].slice(-8);
+    this.activeSession = null;
   }
 
   redact(text) {
@@ -94,6 +148,10 @@ export class BilibiliRtmpOutput {
   status() {
     return {
       state: this.state,
+      rateControl: { ...this.rateControl },
+      sessionId: this.sessionSequence,
+      session: this.activeSession ? { id: this.activeSession.id, startedAt: this.activeSession.startedAt } : null,
+      recentSessions: this.recentSessions.map((session) => ({ ...session, video: session.video ? { ...session.video } : null, progress: { ...session.progress } })),
       audio: this.audio,
       audioCaptureId: this.audioSession?.id || null,
       ...(this.videoInput?.status() || this.lastVideoMetrics || { writtenFrames: 0, duplicatedFrames: 0, droppedFrames: 0, standbyFrames: 0, lastWriteAt: null, lastWriteFrameAgeMs: null, lastFrameAgeMs: null }),
@@ -163,6 +221,7 @@ export class BilibiliRtmpOutput {
     }
     if (this.audio === 'silent') args.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     args.push('-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-g', String(Math.max(2, Math.round(this.fps * 2))), '-b:v', this.bitrate);
+    if (this.rateControl.mode === 'vbv') args.push('-maxrate', `${this.rateControl.maxRateKbps}k`, '-bufsize', `${this.rateControl.vbvBufferKbps}k`);
     if (this.audio !== 'none') args.push('-map', '0:v:0', '-map', '1:a:0', '-c:a', 'aac', '-b:a', '128k', '-shortest');
     if (route.tcUrl) args.push('-rtmp_tcurl', route.tcUrl);
     args.push('-progress', 'pipe:2');
@@ -178,6 +237,7 @@ export class BilibiliRtmpOutput {
       throw error;
     }
     this.child = child;
+    this.beginSession();
     this.child.once('spawn', () => {
       if (this.enabled) {
         this.state = 'running';
@@ -240,12 +300,13 @@ export class BilibiliRtmpOutput {
     this.stopVideoInput();
     void this.closeTransport().catch(() => {});
     const intentional = this.state === 'stopping' || this.state === 'stopped';
+    const detail = this.stderrTail.trim().split(/\r?\n/).filter(Boolean).slice(-4).join(' | ');
+    if (!intentional) this.lastError = this.redact(`ffmpeg exited ${code}${detail ? `: ${detail}` : ''}`);
+    this.finishSession(intentional ? 'owner_stop' : 'unexpected_exit', code, this.lastError);
     if (intentional) {
       this.state = 'stopped';
       return;
     }
-    const detail = this.stderrTail.trim().split(/\r?\n/).filter(Boolean).slice(-4).join(' | ');
-    this.lastError = this.redact(`ffmpeg exited ${code}${detail ? `: ${detail}` : ''}`);
     if (this.enabled && this.reconnectEnabled && this.reconnectAttempts < this.maxReconnectAttempts) {
       this.reconnectCount += 1;
       this.reconnectStartedAt = this.wallNow();
@@ -347,6 +408,7 @@ export class BilibiliRtmpOutput {
     }
     this.state = 'degraded';
     this.lastError = 'stop_timeout';
+    this.finishSession('stop_timeout', null, this.lastError);
     await this.closeTransport();
     throw new Error('stop_timeout');
   }

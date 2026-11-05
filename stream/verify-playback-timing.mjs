@@ -47,6 +47,13 @@ if (!toolsAvailable) {
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
     await output.stop();
+    const outputStatus = output.status();
+    assert.equal(outputStatus.rateControl.mode, 'vbv');
+    assert.equal(outputStatus.rateControl.maxRateKbps, 3500);
+    assert.equal(outputStatus.rateControl.vbvBufferKbps, 7000);
+    assert.equal(outputStatus.recentSessions.length, 1);
+    assert.equal(outputStatus.recentSessions[0].stopReason, 'owner_stop');
+    assert.ok(outputStatus.recentSessions[0].progress.outTimeMs > 0);
     const real = await probePlaybackTiming(file, { requireAudio: true });
     assert.ok(real.video.frames > 0);
     assert.ok(real.audio?.frames > 0);

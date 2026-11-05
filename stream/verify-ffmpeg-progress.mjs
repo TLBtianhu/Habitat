@@ -33,7 +33,13 @@ try {
   assert.equal(output.status().lastWriteFrameAgeMs, 300);
 
   children[0].emit('exit', 187);
-  assert.equal(output.status().reconnectCount, 1);
+  status = output.status();
+  assert.equal(status.recentSessions.length, 1);
+  assert.equal(status.recentSessions[0].stopReason, 'unexpected_exit');
+  assert.equal(status.recentSessions[0].exitCode, 187);
+  assert.equal(status.recentSessions[0].progress.outTimeMs, 1500);
+  assert.equal(status.recentSessions[0].video.lastWriteFrameAgeMs, 300);
+  assert.equal(status.reconnectCount, 1);
   assert.equal(output.status().lastReconnectAt, 200);
   assert.equal(output.status().lastRecoveredAt, null);
   now += 40;
@@ -48,6 +54,15 @@ try {
   await output.stop();
   status = output.status();
   assert.equal(status.state, 'stopped');
+  assert.equal(status.sessionId, 2);
+  assert.equal(status.session, null);
+  assert.equal(status.recentSessions.length, 2);
+  assert.equal(status.recentSessions[1].stopReason, 'owner_stop');
+  assert.equal(status.recentSessions[1].exitCode, 0);
+  assert.ok(status.recentSessions[1].durationMs >= 0);
+  assert.equal(status.rateControl.mode, 'vbv');
+  assert.equal(status.rateControl.maxRateKbps, 3500);
+  assert.equal(status.rateControl.vbvBufferKbps, 7000);
   assert.equal(status.reconnectCount, 1);
   assert.equal(status.lastReconnectDurationMs, 40);
   assert.equal(status.lastKnownProgress.outTimeMs, 1500, '停止后保留最近一次已知的非零输出进度');

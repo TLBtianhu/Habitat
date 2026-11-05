@@ -65,6 +65,7 @@ jobs:
           node stream/verify-audio-playback.mjs
           node stream/verify-paced-video-input.mjs
           node stream/verify-ffmpeg-progress.mjs
+          node stream/verify-rate-control.mjs
           node stream/verify-playback-timing.mjs
           node voice/verify-kokoro-backend.mjs
           node control/verify-scene-preview.mjs
