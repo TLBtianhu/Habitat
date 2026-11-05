@@ -6,18 +6,22 @@ import { BilibiliRtmpOutput } from './outputs/bilibili-rtmp.mjs';
 import { readLiveConfig, validateLiveConfig, buildBilibiliTarget } from './bilibili-live-config.mjs';
 import { PlaybackVerifier } from './playback-verifier.mjs';
 import { RtmpNetworkPolicy } from './network-policy.mjs';
+import { AudioCaptureClient } from './audio-capture-client.mjs';
 
 export class ScenePreviewService {
-  constructor({ desktopUrl, agentToken, ownerToken, fps = 5, host = '127.0.0.1', port = 9281, bilibiliConfigPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', bilibiliFactory = null, verifier = null, network = null }) {
+  constructor({ desktopUrl, agentToken, ownerToken, fps = 5, host = '127.0.0.1', port = 9281, bilibiliConfigPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', bilibiliFactory = null, verifier = null, network = null, bilibiliAudio = process.env.HABITAT_BILIBILI_AUDIO || 'none', audioCapture = null, requireAudio = process.env.HABITAT_PLAYBACK_REQUIRE_AUDIO === '1' }) {
     this.preview = new ConsolePreviewOutput({ token: ownerToken, host, port });
     this.bilibiliConfigPath = bilibiliConfigPath;
     this.bilibiliFactory = bilibiliFactory;
+    this.bilibiliAudio = bilibiliAudio;
+    this.audioCapture = audioCapture || new AudioCaptureClient();
     this.bilibili = null;
     this.network = network || new RtmpNetworkPolicy();
     this.verifier = verifier || new PlaybackVerifier({
       configPath: bilibiliConfigPath,
       outputStatus: () => this.bilibili?.status() || { state: 'stopped' },
       dispatcherFactory: () => this.network.apiDispatcher(),
+      requireAudio,
     });
     this.recorder = new SceneRecorder({
       capture: new CaptureClient({ desktopUrl, token: agentToken, fps }),
@@ -62,7 +66,8 @@ export class ScenePreviewService {
       this.bilibili = null;
     }
     if (!this.bilibili) {
-      this.bilibili = this.bilibiliFactory ? this.bilibiliFactory({ ...config, network: this.network }) : new BilibiliRtmpOutput({ target: config.rtmpUrl, streamKey: config.streamKey, network: this.network });
+      const options = { ...config, network: this.network, audio: this.bilibiliAudio, audioCapture: this.audioCapture };
+      this.bilibili = this.bilibiliFactory ? this.bilibiliFactory(options) : new BilibiliRtmpOutput({ target: options.rtmpUrl, streamKey: options.streamKey, network: options.network, audio: options.audio, audioCapture: options.audioCapture });
       this.recorder.outputs.set('bilibili', this.bilibili);
     }
     await this.recorder.startOutput('bilibili');

@@ -5,8 +5,10 @@ import path from 'node:path';
 
 let sequence = 0;
 export class KokoroBackend {
-  constructor(profile) {
+  constructor(profile, { outputDir = null, spawnImpl = spawn } = {}) {
     this.profile = profile;
+    this.outputDir = outputDir;
+    this.spawn = spawnImpl;
   }
 
   probe() {
@@ -14,6 +16,13 @@ export class KokoroBackend {
     const required = ['model.onnx', 'voices.bin', 'tokens.txt', 'lexicon-us-en.txt', 'lexicon-zh.txt'];
     const missing = required.filter((name) => !fs.existsSync(path.join(p.modelDir, name)));
     if (!fs.existsSync(p.binary)) missing.push(p.binary);
+    const outputDir = this.outputDir || process.env.HABITAT_TMP_ROOT || path.join(process.env.HABITAT_INSTANCE_ROOT || '/opt/habitat', 'tmp');
+    try {
+      fs.mkdirSync(outputDir, { recursive: true, mode: 0o700 });
+      fs.accessSync(outputDir, fs.constants.W_OK);
+    } catch {
+      missing.push(`output-not-writable:${outputDir}`);
+    }
     return {
       available: missing.length === 0,
       engine: 'sherpa-onnx',
@@ -26,7 +35,7 @@ export class KokoroBackend {
   async synthesize(text) {
     const p = this.profile;
     const dir = p.modelDir;
-    const outputDir = process.env.HABITAT_TMP_ROOT || path.join(process.env.HABITAT_INSTANCE_ROOT || '/opt/habitat', 'tmp');
+    const outputDir = this.outputDir || process.env.HABITAT_TMP_ROOT || path.join(process.env.HABITAT_INSTANCE_ROOT || '/opt/habitat', 'tmp');
     fs.mkdirSync(outputDir, { recursive: true, mode: 0o700 });
     const output = path.join(outputDir, `habitat-kokoro-${process.pid}-${++sequence}.wav`);
     const args = [
@@ -42,7 +51,7 @@ export class KokoroBackend {
       text,
     ];
     return new Promise((resolve, reject) => {
-      const child = spawn(p.binary, args, { stdio: ['ignore', 'ignore', 'pipe'] });
+      const child = this.spawn(p.binary, args, { stdio: ['ignore', 'ignore', 'pipe'] });
       const errors = [];
       const timer = setTimeout(() => {
         child.kill();

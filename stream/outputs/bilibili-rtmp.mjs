@@ -4,7 +4,7 @@ import { buildBilibiliTarget } from '../bilibili-live-config.mjs';
 import { RtmpNetworkPolicy } from '../network-policy.mjs';
 
 export class BilibiliRtmpOutput {
-  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none', network = null }) {
+  constructor({ target, streamKey = '', ffmpeg = process.env.HABITAT_FFMPEG || 'ffmpeg', fps = 5, bitrate = '3500k', spawnImpl = spawn, stopTimeoutMs = 4000, reconnect = true, maxReconnectAttempts = 5, reconnectBaseMs = 15000, audio = 'none', audioCapture = null, network = null }) {
     if (!target) throw new Error('Bilibili target required');
     if (/^rtmps?:\/\//.test(target) && !streamKey) throw new Error('Bilibili streamKey required');
     this.target = buildBilibiliTarget(target, streamKey);
@@ -18,6 +18,8 @@ export class BilibiliRtmpOutput {
     this.maxReconnectAttempts = maxReconnectAttempts;
     this.reconnectBaseMs = reconnectBaseMs;
     this.audio = audio;
+    this.audioCapture = audioCapture;
+    this.audioSession = null;
     this.enabled = false;
     this.child = null;
     this.reconnectTimer = null;
@@ -48,6 +50,8 @@ export class BilibiliRtmpOutput {
   status() {
     return {
       state: this.state,
+      audio: this.audio,
+      audioCaptureId: this.audioSession?.id || null,
       frames: this.frames,
       lastSeq: this.lastSeq,
       lastPtsMs: this.lastPtsMs,
@@ -85,9 +89,28 @@ export class BilibiliRtmpOutput {
       '-y', '-loglevel', 'error',
       '-f', 'image2pipe', '-vcodec', 'png', '-framerate', String(this.fps), '-i', '-',
     ];
+    if (this.audio === 'mixer') {
+      if (!this.audioCapture) {
+        this.enabled = false;
+        this.state = 'failed';
+        this.lastError = 'audio capture unavailable';
+        await this.closeTransport();
+        throw new Error('audio capture unavailable');
+      }
+      try {
+        this.audioSession = await this.audioCapture.open();
+      } catch (error) {
+        this.enabled = false;
+        this.state = 'failed';
+        this.lastError = this.redact(error.message);
+        await this.closeTransport();
+        throw error;
+      }
+      args.push('-f', 's16le', '-ar', '48000', '-ac', '2', '-i', this.audioSession.url);
+    }
     if (this.audio === 'silent') args.push('-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000');
     args.push('-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency', '-pix_fmt', 'yuv420p', '-g', String(Math.max(2, Math.round(this.fps * 2))), '-b:v', this.bitrate);
-    if (this.audio === 'silent') args.push('-c:a', 'aac', '-b:a', '128k', '-shortest');
+    if (this.audio !== 'none') args.push('-map', '0:v:0', '-map', '1:a:0', '-c:a', 'aac', '-b:a', '128k', '-shortest');
     if (route.tcUrl) args.push('-rtmp_tcurl', route.tcUrl);
     args.push('-f', 'flv', route.target);
     let child;
@@ -114,10 +137,16 @@ export class BilibiliRtmpOutput {
     return this.status();
   }
 
+  async closeAudioSession() {
+    const session = this.audioSession;
+    this.audioSession = null;
+    if (session?.close) await session.close();
+  }
+
   async closeTransport() {
     const close = this.transportClose;
     this.transportClose = null;
-    if (close) await close();
+    await Promise.all([close ? close() : null, this.closeAudioSession()]);
   }
 
   handleExit(code) {

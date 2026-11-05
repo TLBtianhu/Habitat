@@ -100,7 +100,7 @@ chmod +x "$APP/tools/wsl-pipeline-up.sh"
 if [ -f "$APP/tools/habitat.logrotate" ]; then cp "$APP/tools/habitat.logrotate" /etc/logrotate.d/habitat; fi
 
 chown -R "$HABITAT_USER:$HABITAT_GROUP" "$ETC"
-chown "$HABITAT_USER:$HABITAT_GROUP" "$VAR" "$VAR/world-server"
+chown "$HABITAT_USER:$HABITAT_GROUP" "$VAR" "$VAR/world-server" "$TMP"
 chown -R "$HABITAT_USER:$HABITAT_GROUP" "$VAR/artifacts" "$VAR/logs" "$VAR/hls" "$VAR/outlets" "$VAR/adapters" "$VAR/cache/tts" "$VAR/models" "$VAR/outbox" "$VAR/pump" "$VAR/plugins"
 find "$VAR" -maxdepth 1 -type f -exec chown "$HABITAT_USER:$HABITAT_GROUP" {} +
 chmod -R a+rX "$APP"

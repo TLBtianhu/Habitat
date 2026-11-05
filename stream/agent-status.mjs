@@ -44,6 +44,13 @@ export function agentStreamStatus(status, policy) {
       lastVerifiedAt: status.verification?.lastVerifiedAt || null,
       liveStatus: status.verification?.liveStatus ?? null,
       playbackDecoded: status.verification?.playbackDecoded === true,
+      requireAudio: status.verification?.requireAudio === true,
+      audioDecoded: status.verification?.audioDecoded === true,
+      audioVerifiedAt: status.verification?.audioVerifiedAt || null,
+      audioMaxVolumeDb: status.verification?.audioMaxVolumeDb ?? null,
+      audioEvidenceMaxVolumeDb: status.verification?.audioEvidenceMaxVolumeDb ?? null,
+      audioNonSilent: status.verification?.audioNonSilent === true,
+      audioCodec: status.verification?.audioCodec || null,
       lastError: status.verification?.lastError || null,
     },
     network: {
