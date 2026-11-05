@@ -50,4 +50,4 @@ instanceIdleTimeout=-1
 
 本次恢复还完成了受控 `systemctl restart napcat-attached.service`：旧 `napcat-runtime` 被清理，新容器使用 host 网络启动，未重新要求二维码，重新获得 `online=true、good=true` 和 OneBot ready；继续观察未再次退出。
 
-只读检查不得输出 WebUI Token、OneBot Token、二维码 URL 或 Owner Token。原容器和持久化卷备份在恢复期间保留，不以清空数据作为修复手段。
+只读检查不得输出 WebUI Token、OneBot Token、二维码 URL 或 Owner Token。原容器和持久化卷备份在恢复期间保留，不以清空数据作为修复手段。登录 ready 不是永久状态；出现 `auth_required` 时必须重新认证，不能把上次 ready 当成当前连接证明。
