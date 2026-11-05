@@ -7,6 +7,7 @@ import { readLiveConfig, validateLiveConfig, buildBilibiliTarget } from './bilib
 import { PlaybackVerifier } from './playback-verifier.mjs';
 import { RtmpNetworkPolicy } from './network-policy.mjs';
 import { AudioCaptureClient } from './audio-capture-client.mjs';
+import { probePlaybackTiming } from './playback-timing.mjs';
 
 export class ScenePreviewService {
   constructor({ desktopUrl, agentToken, ownerToken, fps = 5, host = '127.0.0.1', port = 9281, bilibiliConfigPath = process.env.HABITAT_BILIBILI_LIVE_CONFIG || '/opt/habitat/config/bilibili-live.json', bilibiliFactory = null, verifier = null, network = null, bilibiliAudio = process.env.HABITAT_BILIBILI_AUDIO || 'none', audioCapture = null, requireAudio = process.env.HABITAT_PLAYBACK_REQUIRE_AUDIO === '1' }) {
@@ -91,6 +92,19 @@ export class ScenePreviewService {
 
   verificationStatus() {
     return this.verifier.status();
+  }
+
+  async timingBilibili() {
+    if (this.bilibili?.status().state !== 'running') throw new Error('start the live output before timing verification');
+    const config = readLiveConfig(this.bilibiliConfigPath);
+    const uid = config.streamKey.match(/streamname=live_(\d+)_/)?.[1];
+    if (!uid) throw new Error('cannot resolve Bilibili uid');
+    const room = await this.verifier.fetchJson(`https://api.live.bilibili.com/room/v1/Room/getRoomInfoOld?mid=${uid}`);
+    if (!room.roomid) throw new Error('cannot resolve Bilibili room');
+    const play = await this.verifier.fetchJson(`https://api.live.bilibili.com/room/v1/Room/playUrl?cid=${room.roomid}&quality=0&platform=web`);
+    const playbackUrl = play.durl?.[0]?.url;
+    if (!playbackUrl) throw new Error('no playable stream for timing verification');
+    return probePlaybackTiming(playbackUrl, { requireAudio: this.verifier.requireAudio });
   }
 
   async stopBilibili() {

@@ -127,6 +127,10 @@ try {
   assert.equal(verify.body.verified, false);
   assert.equal((await api('/bilibili/live/verification/status')).status, 403);
   assert.equal((await api('/bilibili/live/verification/status', { owner: true })).body.state, 'stopped');
+  assert.equal((await api('/bilibili/live/timing', { method: 'POST', agent: true, body: {} })).status, 403);
+  const stoppedTiming = await api('/bilibili/live/timing', { method: 'POST', owner: true, body: {} });
+  assert.equal(stoppedTiming.status, 502);
+  assert.ok(stoppedTiming.body.error.includes('start the live output'));
   assert.equal((await api('/bilibili/live/stop', { method: 'POST', owner: true })).body.bilibili.state, 'stopped');
   const html = await (await fetch(`http://127.0.0.1:${port}/console.html`)).text();
   assert.ok(html.includes('bili-url') && html.includes('bili-key') && html.includes('saveBilibiliLive') && html.includes('bilibiliLiveAction') && html.includes('bili-verify') && html.includes('bilibiliVerifyAction') && html.includes('stream-autonomous') && html.includes('streamStartAction') && html.includes('saveStreamPolicy'));

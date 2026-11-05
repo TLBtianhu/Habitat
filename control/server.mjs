@@ -285,6 +285,11 @@ http.createServer(async (req, res) => {
     try { return json(res, 200, await scenePreview.verifyBilibili()); }
     catch (e) { return json(res, 502, { error: e.message }); }
   }
+  if (url.pathname === '/bilibili/live/timing' && req.method === 'POST') {
+    if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
+    try { return json(res, 200, await scenePreview.timingBilibili()); }
+    catch (e) { return json(res, 502, { error: e.message }); }
+  }
   if (url.pathname === '/bilibili/live/verification/status' && req.method === 'GET') {
     if (!isOwner(req)) return json(res, 403, { error: 'owner required' });
     return json(res, 200, scenePreview.verificationStatus());

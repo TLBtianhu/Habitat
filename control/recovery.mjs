@@ -53,7 +53,7 @@ export class RecoveryManager {
     const record = this._read();
     const pending = this._pending();
     const stream = this.streamStatus?.() || null;
-    const streamAttention = stream?.state === 'interrupted'
+    const streamAttention = stream?.state === 'interrupted' || stream?.state === 'degraded'
       || ['starting', 'running', 'stopping', 'reconnecting'].includes(stream?.output?.state);
     return {
       state: record.state,

@@ -55,10 +55,13 @@ try {
   assert.equal(streamRecovery.status().stream.requiresAttention, true);
   stream = { state: 'interrupted', output: { state: 'stopped' }, live: false };
   assert.equal(streamRecovery.status().recoveryRequired, true, 'interrupted 必须对 Owner 可见');
+  stream = { state: 'degraded', output: { state: 'stopped' }, live: false };
+  assert.equal(streamRecovery.status().recoveryRequired, true, 'degraded/stop_timeout 也必须要求 Owner 关注');
+  assert.equal(streamRecovery.status().stream.requiresAttention, true);
   stream = { state: 'stopped', output: { state: 'stopped' }, live: false };
   assert.equal(streamRecovery.status().recoveryRequired, false);
   assert.equal(streamRecovery.status().stream.requiresAttention, false);
-  assert.equal(streamReads, 5, '恢复只读取调度状态，不调用任何启停执行器');
+  assert.equal(streamReads, 7, '恢复只读取调度状态，不调用任何启停执行器');
   console.log('ok: 正常/异常停止识别、只读恢复、pending 清理与成功技能门槛');
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
