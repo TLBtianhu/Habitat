@@ -1,7 +1,7 @@
 # ADR-036：按墙钟节奏输出视频帧，修复音视频时间轴漂移
 
 日期：2026-11-05
-状态：本地与 90 秒公开播放样本验证通过，15 分钟复测中
+状态：Accepted（15 分钟节奏与证据复测通过；主观观看反馈待确认）
 
 ## 背景
 
@@ -51,3 +51,11 @@ FFprobe 显示视频 time_base 为 1/1000。该结果证明旧实现的时间轴
 复测还发现：一次 ffprobe/FFmpeg 探测超时会把 `playbackDecoded` 清零，如果同时把它当作 LIVE 开关，就会让已有成功证据的会话反复抖动。
 
 因此 `playbackDecoded` 只表示最近一次探测是否成功；`verified` 表示仍在 TTL 内的真实成功播放证据。探测进行中若已有新鲜证据，状态保持 `verified` 并另标 `checkInFlight`，不立即降级。`lastVerifiedAt` 超出 TTL、输出重连或停止时才退出 LIVE。重连后必须用当前会话的新证据恢复，不能拿历史证据冒充在线。
+
+## 15 分钟复测结果
+
+修复后的 Owner 会话完成最长 15 分钟测试，最终 `stopReason=max_duration`，`autonomous=off`，输出和音频 capture 均停止，冷却按 `lastStoppedAt + 600000ms` 计算。整场源帧 2701；最后一个编码会话写入 1862 帧、重复最新帧 704 次、丢弃 27 个落后调度间隔、待机帧 2 帧。观察记录中有两次重连，均重新取得播放证据后恢复，未以历史证据伪装持续在线。
+
+首次公开非静音证据为 `audioVerifiedAt=1793855447905`、`audioEvidenceMaxVolumeDb=-6.2`、AAC，关联 utterance 28；不据此声称语义转写或正式大肥鱼音色。最终证据保存在 `data/artifacts/stream-stability-latest.json` 和 `stream-stability-first-audio.json`，其中 `pacing.scope` 明确区分整场源帧与最后一个编码会话的写入统计。
+
+这证明本轮公开节奏、音视频证据、重连恢复与调度停止成立；用户主观观看端是否仍有缓冲仍需反馈，不能仅凭这些指标宣称所有网络与播放器场景都绝对无缓冲。
