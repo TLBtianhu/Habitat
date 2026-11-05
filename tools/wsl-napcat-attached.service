@@ -1,0 +1,17 @@
+[Unit]
+Description=Habitat NapCat attached runtime
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/docker run --rm --network host --name napcat-runtime --volumes-from napcat --env-file /opt/habitat/state/napcat-runtime.env --mount type=bind,src=/opt/habitat/app/tools/napcat-nogpu-entrypoint.sh,dst=/opt/habitat-nogpu-entrypoint.sh,readonly napcat-habitat:v1 bash /opt/habitat-nogpu-entrypoint.sh
+ExecStop=-/usr/bin/docker stop --timeout 15 napcat-runtime
+Restart=no
+TimeoutStopSec=45
+StandardOutput=append:/opt/habitat/data/logs/napcat-runtime.log
+StandardError=append:/opt/habitat/data/logs/napcat-runtime.log
+SyslogIdentifier=napcat-attached
+
+[Install]
+WantedBy=multi-user.target

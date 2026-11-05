@@ -28,7 +28,7 @@ powershell -File tools/win/habitat.ps1 -Action resume
 ## 正常停机顺序
 
 1. **停止新决策**：`habitat-agent` 停止接收新 tick，最多等待当前 tick 5 秒，随后发布 AppSession 快照、暂停并保存当前 Episode、compact 分场所记忆；超时明确报错，不假装成功。
-2. **停止出口与适配器**：Outlet Supervisor 停止编码进程并等待真实退出；QQ/B站/MC 适配器由 adapter host 停止；B站与 QQ WebSocket 均正常 close 优先，1 秒后有界 terminate。已配置的 `napcat` 容器也执行有界 `docker stop`，启动端只拉起已存在的同名容器，不创建新实例，也不影响其他容器。
+2. **停止出口与适配器**：Outlet Supervisor 停止编码进程并等待真实退出；QQ/B站/MC 适配器由 adapter host 停止；B站与 QQ WebSocket 均正常 close 优先，1 秒后有界 terminate。NapCat 由 `napcat-attached.service` 以固定 `napcat-runtime` 附着运行，原 `napcat` 容器只作为持久化卷源保留。停止时先停 systemd 服务，再对运行容器执行有界 `docker stop`，避免自动重启抵消停止；启动端不创建未命名实例，也不影响其他容器。
 3. **停止音频与桌面生产**：Voice、Audio Mixer、Desktop 停止新的合成和捕获，已有磁盘缓存保留。
 4. **停止控制面和舞台**：Control、Stage 以及已知旧 Habitat 单元最后退出。
 5. **保留 WSL 与其他工作**：Habitat 服务停止后，不执行全局 `wsl --shutdown`；只有使用专用发行版且主人明确选择时，才允许单独终止该发行版。

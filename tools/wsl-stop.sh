@@ -32,13 +32,18 @@ for name in qq bilibili mc; do
   fi
 done
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
-  if [ -n "$(docker ps -q --filter 'name=^/napcat$')" ]; then
-    echo '[stop] napcat'
-    if ! docker stop --timeout 30 napcat >/dev/null; then
-      echo '[stop] failed: napcat' >&2
-      FAILED=1
-    fi
+  if [ -f /etc/systemd/system/napcat-attached.service ]; then
+    systemctl stop napcat-attached.service
   fi
+  for container in napcat-runtime napcat; do
+    if [ -n "$(docker ps -q --filter "name=^/${container}$")" ]; then
+      echo "[stop] ${container}"
+      if ! docker stop --timeout 30 "$container" >/dev/null; then
+        echo "[stop] failed: ${container}" >&2
+        FAILED=1
+      fi
+    fi
+  done
 fi
 stop_unit habitat-outlet-supervisor.service
 

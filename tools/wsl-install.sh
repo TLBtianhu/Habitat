@@ -13,7 +13,7 @@ SRC="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 HABITAT_USER="${HABITAT_USER:-$(id -un 1000 2>/dev/null || echo tlb3)}"
 HABITAT_GROUP="$(id -gn "$HABITAT_USER")"
 NODE_HOME="$RUNTIME/node22"
-UNITS=(habitat-stage habitat-control habitat-desktop habitat-agent habitat-voice habitat-audio habitat-outlet-supervisor habitat-pipeline fishbowl-body fishbowl-world)
+UNITS=(habitat-stage habitat-control habitat-desktop habitat-agent habitat-voice habitat-audio habitat-outlet-supervisor habitat-pipeline fishbowl-body fishbowl-world napcat-attached)
 # fishbowl-world 只是兼容状态单元，启动它不代表 MC 世界已连接；世界由适配器拥有。
 AUTO_START_UNITS=(habitat-stage habitat-control habitat-desktop habitat-agent habitat-voice habitat-audio habitat-outlet-supervisor fishbowl-body fishbowl-world)
 ITEMS=(tools runtime agent desktop voice audio display identity director control stage stream clients adapters plugins mcp assets-packs)
@@ -97,6 +97,12 @@ for name in "${UNITS[@]}"; do
   fi
 done
 chmod +x "$APP/tools/wsl-pipeline-up.sh"
+if [ -f "$APP/tools/wsl-napcat-attached.service" ] && grep -q -- '--network host' "$APP/tools/wsl-napcat-attached.service"; then
+  mkdir -p /etc/systemd/system/habitat-agent.service.d
+  cp "$APP/tools/onebot-host-network.conf" /etc/systemd/system/habitat-agent.service.d/onebot-host-network.conf
+else
+  rm -f /etc/systemd/system/habitat-agent.service.d/onebot-host-network.conf
+fi
 if [ -f "$APP/tools/habitat.logrotate" ]; then cp "$APP/tools/habitat.logrotate" /etc/logrotate.d/habitat; fi
 
 chown -R "$HABITAT_USER:$HABITAT_GROUP" "$ETC"
