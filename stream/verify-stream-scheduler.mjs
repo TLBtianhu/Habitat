@@ -94,6 +94,10 @@ try {
   const agentStop = await scheduler.propose({ action: 'stop', actor: 'agent', intentId: agentLive.lastIntentId });
   assert.equal(agentStop.state, 'stopped');
   assert.equal(agentStop.stopReason, 'agent');
+  const agentStoppedAt = scheduler.lastStoppedAt;
+  policyStore.save({ autonomous: 'off', cooldownMs: 600000 });
+  assert.equal(scheduler.status().cooldownUntil, agentStoppedAt + 600000, '临时 0 冷却验收后必须恢复当前策略的实际冷却');
+  policyStore.save({ autonomous: 'anytime', cooldownMs: 0 });
   const forbidden = await scheduler.propose({ action: 'stop', actor: 'agent', intentId: 'wrong' });
   assert.equal(forbidden.reason, 'forbidden');
 

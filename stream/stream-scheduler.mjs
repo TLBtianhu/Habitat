@@ -144,8 +144,9 @@ export class StreamScheduler {
   }
 
   effectiveCooldownUntil() {
-    if (!this.lastStoppedAt) return this.cooldownUntil;
-    return Math.min(this.cooldownUntil, this.lastStoppedAt + this.policyStore.get().cooldownMs);
+    // 冷却随当前策略重算；临时验收或 owner 调整过 cooldownMs 后，不沿用旧的绝对截止时间。
+    if (this.lastStoppedAt) return this.lastStoppedAt + this.policyStore.get().cooldownMs;
+    return this.cooldownUntil;
   }
 
   canStart() {

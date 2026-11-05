@@ -41,8 +41,11 @@
 - `stream/verify-stream-scheduler.mjs`：off、owner/agent、冷却、单次/每日时长、验证失败、窗口外预约与窗口内启动；另覆盖验证中重复 owner 停止、真实停止去重、过期证据与重连不得显示 LIVE。
 - `control/verify-bilibili-settings.mjs`：owner/agent HTTP 权限、off 拒绝和策略页面。
 - 2026-11-05 生产实测：owner 链路曾取得真实播放解码证据（`lastVerifiedAt`），随后房间状态回落、播放地址 404，输出重连后断开；因此只记为短暂验证成功，不记为持续 LIVE。该轮同时暴露了验证期间停止请求被跳过的问题，已增加并发回归与修复。
-- Agent 的真实 RTMP 启停验收须在新代码部署后另行执行；成功后恢复 `autonomous=off` 和原冷却配置，不把临时授权保留为永久自主开播。
+- 随后完成 owner 与 Agent 两轮真实验收：两者均经 `liveStatus=1`、独立播放地址解码成功进入 LIVE，`ownerVerifiedAt=1793841217958`、`agentVerifiedAt=1793841242581`；随后分别以 owner/Agent 和匹配的 `intentId` 停止。最后清理动作再次以 owner 确认输出停止，恢复 `autonomous=off`、`maxDurationMs=3600000`、`cooldownMs=600000`，不把临时授权保留为永久自主开播。
+- 冷却按 `lastStoppedAt + 当前 policy.cooldownMs` 计算；临时测试把冷却改为 0 后，恢复策略也必须恢复实际冷却，不能只恢复文件里的数值。
 
 ## 推流码刷新边界
 
 B 站公开资料没有给出 Habitat 可以固定推断的推流码刷新周期。`trid` 变化只说明本次推流参数更新，不能据此宣称固定过期时间。推流码可能轮换、撤销或触发风控；当前是否有效必须由真实 RTMP 结果、房间 `liveStatus` 和独立播放验证判断。失效时进入 `degraded/stale/stopped` 并提示 `requiresRefresh`，不伪造可永久复用。
+
+2026-11-05 的对照中，同一 `key` 仅更新 `trid` 后，owner 与 Agent 均成功推流并取得播放证据；Agent 还紧接着复用了 owner 刚使用过的同一完整推流码并成功。这证明本次会话参数的新鲜度是有效变量，但也证明**并非每次开播都必须更换完整推流码**。它不构成固定 TTL、永久复用或自动刷新接口的证据。直连、SOCKS5、RTMPS、无音轨/AAC、5fps/30fps 的失败对照不能单独确定根因，也不能据此宣称代理或编码参数是修复手段。
