@@ -9,7 +9,10 @@ fi
 if [ -z "$NODE" ]; then NODE=/opt/habitat/runtime/node22/bin/node; fi
 stop_unit() {
   local unit="$1"
-  if systemctl is-active --quiet "$unit"; then
+  # is-active 对 auto-restart 单元返回非零；必须同时停止 activating 单元。
+  local state
+  state="$(systemctl show "$unit" -p ActiveState --value)"
+  if [ "$state" = 'active' ] || [ "$state" = 'activating' ]; then
     echo "[stop] $unit"
     if ! systemctl stop "$unit"; then
       echo "[stop] failed: $unit" >&2

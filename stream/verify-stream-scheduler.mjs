@@ -51,14 +51,41 @@ try {
   assert.equal(live.state, 'live');
   assert.equal(live.live, true);
   assert.equal(live.verification.playbackDecoded, true);
+
+  // 已取得的 LIVE 证据一旦过期或输出重连，就不能继续显示 LIVE。
+  output = { state: 'reconnecting', lastError: null };
+  verification = { ...verification, state: 'stale', verified: false, playbackDecoded: false };
+  const stale = scheduler.status();
+  assert.equal(stale.state, 'reconnecting');
+  assert.equal(stale.live, false);
+  output = { state: 'running', lastError: null };
+  verification = { ...verification, state: 'verified', verified: true, playbackDecoded: true };
+
+  // 验证 await 期间的 owner 停止必须排队执行，不能返回旧状态并留下推流进程。
+  let finishVerification;
+  scenePreview.verifyBilibili = () => new Promise((resolve) => { finishVerification = resolve; });
+  const ticking = scheduler.tick();
+  const stopDuringTick = scheduler.stop({ actor: 'owner' });
+  const duplicateStop = scheduler.stop({ actor: 'owner' });
+  assert.equal(scheduler.status().state, 'stopping');
+  assert.equal(scheduler.status().live, false);
+  const stopsBeforeConcurrentStop = stops;
+  finishVerification({ state: 'verified', verified: true, lastCheckedAt: now, lastVerifiedAt: now, lastError: null, liveStatus: 1, playbackDecoded: true });
+  const stoppedDuringTick = await stopDuringTick;
+  await duplicateStop;
+  await ticking;
+  assert.equal(stoppedDuringTick.state, 'stopped');
+  assert.equal(stoppedDuringTick.live, false);
+  assert.equal(stoppedDuringTick.stopReason, 'owner');
+  assert.equal(output.state, 'stopped');
+  assert.equal(stops, stopsBeforeConcurrentStop + 1);
+
   now += 1000;
   policyStore.save({ autonomous: 'anytime', cooldownMs: 0 });
-  const stopped = await scheduler.propose({ action: 'stop', actor: 'owner' });
-  assert.equal(stopped.state, 'stopped');
-  assert.equal(stopped.stopReason, 'owner');
-  assert.equal(stops, 1);
-  assert.ok(stopped.dailyMs > 0);
-  assert.equal(stopped.live, false);
+  scenePreview.verifyBilibili = async () => {
+    verification = { state: 'verified', verified: true, lastCheckedAt: now, lastVerifiedAt: now, lastError: null, liveStatus: 1, playbackDecoded: true };
+    return verification;
+  };
   const agentStart = await scheduler.propose({ action: 'start', actor: 'agent', maxDurationMs: 60000 });
   assert.equal(agentStart.state, 'starting');
   assert.equal(starts, 2);
@@ -77,7 +104,10 @@ try {
   assert.equal(maxStopped.stopReason, 'max_duration');
   assert.ok(maxStopped.dailyMs >= 1000);
 
-  scenePreview.verifyBilibili = async () => ({ state: 'degraded', verified: false, lastCheckedAt: now, lastVerifiedAt: null, lastError: 'playback failed', liveStatus: 0, playbackDecoded: false });
+  scenePreview.verifyBilibili = async () => {
+    verification = { state: 'degraded', verified: false, lastCheckedAt: now, lastVerifiedAt: null, lastError: 'playback failed', liveStatus: 0, playbackDecoded: false };
+    return verification;
+  };
   await scheduler.start({ actor: 'owner', maxDurationMs: 120000 });
   now += 60000;
   const failed = await scheduler.tick();
@@ -86,7 +116,10 @@ try {
   assert.ok(failed.lastError.includes('playback failed'));
   assert.equal(failed.requiresRefresh, true);
 
-  scenePreview.verifyBilibili = async () => ({ state: 'verified', verified: true, lastCheckedAt: now, lastVerifiedAt: now, lastError: null, liveStatus: 1, playbackDecoded: true });
+  scenePreview.verifyBilibili = async () => {
+    verification = { state: 'verified', verified: true, lastCheckedAt: now, lastVerifiedAt: now, lastError: null, liveStatus: 1, playbackDecoded: true };
+    return verification;
+  };
   policyStore.save({ autonomous: 'anytime', cooldownMs: 10000 });
   await scheduler.start({ actor: 'owner', maxDurationMs: 1000 });
   await scheduler.stop({ actor: 'owner' });

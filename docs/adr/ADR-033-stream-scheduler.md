@@ -18,11 +18,15 @@
 状态包括 `proposed/scheduled/starting/live/reconnecting/stopping/stopped/degraded/interrupted`。
 
 - `starting` 表示输出已启动但还没有足够播放证据。
-- `live` 只能由独立 `PlaybackVerifier` 的真实解码结果产生，不能由 FFmpeg 启动、TCP 可达或旧证据推断。
+- `live` 只能由当前输出仍为 `running`、且独立 `PlaybackVerifier` 本轮真实解码成功的证据产生，不能由 FFmpeg 启动、TCP 可达或旧证据推断。
+- `verification.state=verified`、`verified=true`、`playbackDecoded=true` 和 `lastVerifiedAt` 必须同时成立；重连、检查中、过期和已停止证据一律不是 LIVE。
+- `lastVerifiedAt` 只表示某次成功解码的历史时间，不是永久有效的开播凭证。
 - `requiresRefresh` 在播放/输出/网络失败、过期或调度重启后提示更新；agent 不得在此状态自主启动。
 - `lastCheckedAt`、`lastVerifiedAt`、`startedAt`、`lastStoppedAt`、`cooldownUntil`、`dailyMs`、`stopReason`、`lastIntentId` 和 `lastError` 用于审计。
 - 单次时长、每日额度、冷却、验证超时和 `stopOnEvidenceFailure` 在 `tick()` 中执行。
 - 调度状态写入根目录 `state/stream-scheduler.json`，重启不会自动恢复公开推流，而是进入 `interrupted`。
+- 验证或启动的 `await` 期间收到停止请求时，立即显示 `stopping` 并合并排队；当前操作退出后必须真实停止输出，owner 请求优先。不得只返回旧状态而留下编码器。
+- `lastVerifiedAt` 只证明当时曾成功解码，停止原因与冷却时间必须以实际完成的停止操作为准。
 
 ## API 与页面
 
@@ -34,9 +38,10 @@
 
 ## 验证
 
-- `stream/verify-stream-scheduler.mjs`：off、owner/agent、冷却、单次/每日时长、验证失败、窗口外预约与窗口内启动。
+- `stream/verify-stream-scheduler.mjs`：off、owner/agent、冷却、单次/每日时长、验证失败、窗口外预约与窗口内启动；另覆盖验证中重复 owner 停止、真实停止去重、过期证据与重连不得显示 LIVE。
 - `control/verify-bilibili-settings.mjs`：owner/agent HTTP 权限、off 拒绝和策略页面。
-- 生产用有效 RTMP 配置验证 owner 与 agent 启动、真实播放、LIVE、owner/agent 停止、停止原因和冷却；结束后恢复 `autonomous=off`。
+- 2026-11-05 生产实测：owner 链路曾取得真实播放解码证据（`lastVerifiedAt`），随后房间状态回落、播放地址 404，输出重连后断开；因此只记为短暂验证成功，不记为持续 LIVE。该轮同时暴露了验证期间停止请求被跳过的问题，已增加并发回归与修复。
+- Agent 的真实 RTMP 启停验收须在新代码部署后另行执行；成功后恢复 `autonomous=off` 和原冷却配置，不把临时授权保留为永久自主开播。
 
 ## 推流码刷新边界
 

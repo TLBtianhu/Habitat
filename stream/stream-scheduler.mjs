@@ -16,6 +16,7 @@ export class StreamScheduler {
     this.tickMs = tickMs;
     this.file = process.env.HABITAT_STREAM_SCHEDULER_FILE || '/opt/habitat/state/stream-scheduler.json';
     this.transitioning = false;
+    this.stopRequests = [];
     this.timer = null;
     this.pending = null;
     this.lastIntentId = null;
@@ -110,10 +111,17 @@ export class StreamScheduler {
     const output = this.scenePreview.status().bilibili || { state: 'stopped', lastError: null };
     const verification = this.scenePreview.status().verification || { state: 'stopped', lastCheckedAt: null, lastVerifiedAt: null, lastError: null };
     const network = this.scenePreview.status().network || { mode: 'direct', supported: true, lastResult: 'unknown', lastError: null };
+    const live = this.state === 'live' && output.state === 'running'
+      && verification.state === 'verified' && verification.verified === true
+      && verification.playbackDecoded === true && Boolean(verification.lastVerifiedAt);
+    const state = this.state !== 'live' || live ? this.state
+      : output.state === 'reconnecting' ? 'reconnecting'
+        : ['failed', 'degraded'].includes(output.state) ? 'degraded'
+          : output.state === 'stopped' ? 'interrupted' : 'starting';
     return {
-      state: this.state,
-      started: ['starting', 'live', 'reconnecting'].includes(this.state),
-      live: this.state === 'live',
+      state,
+      started: ['starting', 'live', 'reconnecting'].includes(state),
+      live,
       lastIntentId: this.lastIntentId,
       startedAt: this.startedAt,
       lastStoppedAt: this.lastStoppedAt,
@@ -219,6 +227,7 @@ export class StreamScheduler {
     this.persist();
     try {
       await this.scenePreview.startBilibili();
+      if (this.stopRequests.length) return this.status();
       this.startTimer();
       return this.status();
     } catch (error) {
@@ -231,6 +240,7 @@ export class StreamScheduler {
       return this.status();
     } finally {
       this.transitioning = false;
+      await this.drainStopRequests();
     }
   }
 
@@ -246,9 +256,50 @@ export class StreamScheduler {
   }
 
   async stop({ actor = 'owner', reason = 'owner' } = {}) {
-    if (this.transitioning) return this.status();
+    if (!this.transitioning) return this.performStop({ actor, reason });
+    // owner 停止不能被验证或启动中的 await 吞掉；同一场停止请求合并为一次真实停止。
+    this.state = 'stopping';
+    this.pending = null;
+    this.persist();
+    const existing = this.stopRequests[0];
+    if (existing) {
+      if (actor === 'owner') {
+        existing.actor = 'owner';
+        existing.reason = reason;
+      }
+      return existing.promise;
+    }
+    const request = { actor, reason };
+    request.promise = new Promise((resolve, reject) => {
+      request.resolve = resolve;
+      request.reject = reject;
+    });
+    this.stopRequests.push(request);
+    return request.promise;
+  }
+
+  async drainStopRequests() {
+    const requests = this.stopRequests.splice(0);
+    if (!requests.length) return;
+    const request = requests.find((item) => item.actor === 'owner') || requests[0];
+    try {
+      const result = await this.performStop(request);
+      for (const item of requests) item.resolve(result);
+    } catch (error) {
+      for (const item of requests) item.reject(error);
+    }
+  }
+
+  async performStop({ actor = 'owner', reason = 'owner' } = {}) {
+    if (this.transitioning) throw new Error('stop transition already active');
     const output = this.scenePreview.status().bilibili || { state: 'stopped' };
-    if (this.state === 'stopped' && output.state === 'stopped') return this.status();
+    if (this.state === 'stopped' && output.state === 'stopped') {
+      if (actor === 'owner' && this.stopReason !== reason) {
+        this.stopReason = reason;
+        this.persist();
+      }
+      return this.status();
+    }
     this.transitioning = true;
     const startedAt = this.startedAt;
     const policy = this.policyStore.get();
@@ -271,6 +322,7 @@ export class StreamScheduler {
       this.persist();
     } finally {
       this.transitioning = false;
+      await this.drainStopRequests();
     }
     return this.status();
   }
@@ -306,7 +358,11 @@ export class StreamScheduler {
         this.state = 'degraded';
       } else {
         const verification = await this.scenePreview.verifyBilibili();
-        if (verification.verified) {
+        if (this.stopRequests.length) return this.status();
+        const currentOutput = this.scenePreview.status().bilibili || { state: 'stopped' };
+        if (verification.state === 'verified' && verification.verified === true
+          && verification.playbackDecoded === true && verification.lastVerifiedAt
+          && currentOutput.state === 'running') {
           this.state = 'live';
           this.lastError = verification.lastError || null;
         } else if (verification.state === 'degraded' && this.now() - this.startedAt >= policy.verificationTimeoutMs && policy.stopOnEvidenceFailure && policy.requireVerified) {
@@ -314,7 +370,9 @@ export class StreamScheduler {
           this.transitioning = false;
           return this.stop({ actor: 'system', reason: 'verification_failed' });
         } else {
-          this.state = output.state === 'reconnecting' ? 'reconnecting' : 'starting';
+          this.state = currentOutput.state === 'reconnecting' ? 'reconnecting'
+            : ['failed', 'degraded'].includes(currentOutput.state) ? 'degraded'
+              : currentOutput.state === 'stopped' ? 'interrupted' : 'starting';
         }
       }
       this.persist();
@@ -324,6 +382,7 @@ export class StreamScheduler {
       this.persist();
     } finally {
       this.transitioning = false;
+      await this.drainStopRequests();
     }
     return this.status();
   }

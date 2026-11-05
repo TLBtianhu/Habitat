@@ -121,7 +121,7 @@ function Start-HabitatLifecycle {
     $node = Get-HabitatNodePath -Wsl $Wsl
     & $Wsl "$node /opt/habitat/app/tools/lifecycle.mjs boot" | Out-Null
     & $Wsl 'bash /opt/habitat/app/tools/wsl-start-adapters.sh' | Out-Null
-    & $Wsl 'systemctl start habitat-stage.service habitat-control.service habitat-desktop.service habitat-voice.service habitat-audio.service habitat-outlet-supervisor.service habitat-agent.service' | Out-Null
+    & $Wsl 'systemctl start habitat-stage.service habitat-control.service habitat-desktop.service habitat-voice.service habitat-audio.service habitat-outlet-supervisor.service habitat-agent.service fishbowl-body.service fishbowl-world.service' | Out-Null
   }
   & $Health | Out-Null
   if ($InstallRoot) {

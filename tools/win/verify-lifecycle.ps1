@@ -32,6 +32,7 @@ $started = Start-HabitatLifecycle -Wsl $wsl -Http $http -Health $health -Process
 if ($started.keepaliveProcess.Id -ne 4242) { throw 'WSL down 时必须创建受控 keepalive' }
 if ($started.status.recoveryRequired -ne $true) { throw '异常状态必须显示需要恢复' }
 if ($script:commands -contains 'wsl --shutdown') { throw '启动流程不得关闭整个 WSL' }
+if (-not ($script:commands -contains 'systemctl start habitat-stage.service habitat-control.service habitat-desktop.service habitat-voice.service habitat-audio.service habitat-outlet-supervisor.service habitat-agent.service fishbowl-body.service fishbowl-world.service')) { throw '手动恢复必须包含桌面身体与兼容状态单元' }
 
 $stopped = Stop-HabitatLifecycle -Wsl $wsl
 if ($stopped.state -ne 'stopped' -or $stopped.wslShutdown) { throw '停止必须是优雅停止且不得全局关闭 WSL' }

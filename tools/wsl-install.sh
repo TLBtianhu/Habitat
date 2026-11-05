@@ -13,7 +13,9 @@ SRC="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 HABITAT_USER="${HABITAT_USER:-$(id -un 1000 2>/dev/null || echo tlb3)}"
 HABITAT_GROUP="$(id -gn "$HABITAT_USER")"
 NODE_HOME="$RUNTIME/node22"
-UNITS=(habitat-stage habitat-control habitat-desktop habitat-agent habitat-voice habitat-audio habitat-outlet-supervisor habitat-pipeline)
+UNITS=(habitat-stage habitat-control habitat-desktop habitat-agent habitat-voice habitat-audio habitat-outlet-supervisor habitat-pipeline fishbowl-body fishbowl-world)
+# fishbowl-world 只是兼容状态单元，启动它不代表 MC 世界已连接；世界由适配器拥有。
+AUTO_START_UNITS=(habitat-stage habitat-control habitat-desktop habitat-agent habitat-voice habitat-audio habitat-outlet-supervisor fishbowl-body fishbowl-world)
 ITEMS=(tools runtime agent desktop voice audio display identity director control stage stream clients adapters plugins mcp assets-packs)
 
 [[ "$APP" == /opt/habitat/app && "$ETC" == /opt/habitat/config && "$VAR" == /opt/habitat/data ]]
@@ -106,8 +108,8 @@ chmod -R a+rX "$APP"
 
 "$NODE_HOME/bin/node" "$APP/tools/write-instance-env.mjs" --root "$ROOT"
 systemctl daemon-reload
-systemctl enable habitat-stage habitat-control habitat-desktop habitat-agent habitat-voice habitat-audio habitat-outlet-supervisor
-systemctl start habitat-stage habitat-control habitat-desktop habitat-audio habitat-voice habitat-agent habitat-outlet-supervisor
+systemctl enable "${AUTO_START_UNITS[@]}"
+systemctl start "${AUTO_START_UNITS[@]}"
 for _ in $(seq 1 20); do
   if curl --noproxy '*' --max-time 2 -fsS http://127.0.0.1:9240/status >/dev/null 2>&1 && curl --noproxy '*' --max-time 2 -fsS http://127.0.0.1:9240/pump/status >/dev/null 2>&1; then break; fi
   sleep 1
