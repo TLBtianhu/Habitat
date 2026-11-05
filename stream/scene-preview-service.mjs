@@ -104,7 +104,7 @@ export class ScenePreviewService {
     const play = await this.verifier.fetchJson(`https://api.live.bilibili.com/room/v1/Room/playUrl?cid=${room.roomid}&quality=0&platform=web`);
     const playbackUrl = play.durl?.[0]?.url;
     if (!playbackUrl) throw new Error('no playable stream for timing verification');
-    return probePlaybackTiming(playbackUrl, { requireAudio: this.verifier.requireAudio });
+    return probePlaybackTiming(playbackUrl, { requireAudio: this.verifier.requireAudio, captureFile: '/opt/habitat/data/artifacts/playback-timing-sample.flv' });
   }
 
   async stopBilibili() {

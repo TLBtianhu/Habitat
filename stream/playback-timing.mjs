@@ -1,5 +1,8 @@
 // 独立播放节奏分析：只分析公开播放地址，不读取推流凭证，不把 speed/codec 当作健康证明。
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 
 function percentile(values, p) {
   if (!values.length) return null;
@@ -51,27 +54,36 @@ export function analyzePlaybackFrames(frames, { wallDurationMs = null, requireAu
   };
 }
 
-export async function probePlaybackTiming(url, { timeoutMs = 30000, durationMs = 6000, spawnImpl = spawn, requireAudio = false } = {}) {
+export async function probePlaybackTiming(url, { timeoutMs = 30000, durationMs = 6000, spawnImpl = spawn, requireAudio = false, captureFile = null } = {}) {
   const startedAt = Date.now();
-  const child = spawnImpl('ffprobe', [
-    '-v', 'error', '-headers', 'Referer: https://live.bilibili.com/\r\nUser-Agent: Mozilla/5.0\r\n',
-    '-read_intervals', `%+${Math.max(1, Math.round(durationMs / 1000))}`,
-    '-show_frames', '-show_entries', 'frame=media_type,best_effort_timestamp_time,pkt_dts_time,pkt_duration_time',
-    '-of', 'json', '-i', url,
-  ], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, http_proxy: '', https_proxy: '', HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', all_proxy: '', no_proxy: '*', NO_PROXY: '*' },
+  const temporary = captureFile ? null : fs.mkdtempSync(path.join(os.tmpdir(), 'habitat-playback-timing-'));
+  const file = captureFile || path.join(temporary, 'sample.flv');
+  if (captureFile) fs.mkdirSync(path.dirname(captureFile), { recursive: true });
+  const run = (command, args) => new Promise((resolve, reject) => {
+    const child = spawnImpl(command, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, http_proxy: '', https_proxy: '', HTTP_PROXY: '', HTTPS_PROXY: '', ALL_PROXY: '', all_proxy: '', no_proxy: '*', NO_PROXY: '*' },
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout?.on('data', (chunk) => { stdout += chunk.toString(); });
+    child.stderr?.on('data', (chunk) => { stderr += chunk.toString(); });
+    const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
+    child.once('error', reject);
+    child.once('close', (code) => {
+      clearTimeout(timer);
+      if (code !== 0) reject(new Error(`${command} timing capture failed: ${stderr.replace(/https?:\/\/\S+/g, '[playback-url]').slice(0, 300)}`));
+      else resolve({ stdout, stderr });
+    });
   });
-  let stdout = '';
-  let stderr = '';
-  child.stdout?.on('data', (chunk) => { stdout += chunk.toString(); });
-  child.stderr?.on('data', (chunk) => { stderr += chunk.toString(); });
-  const close = new Promise((resolve) => child.once('close', resolve));
-  child.once('error', () => {});
-  const timer = setTimeout(() => child.kill('SIGTERM'), timeoutMs);
-  const code = await close;
-  clearTimeout(timer);
-  if (code !== 0) throw new Error(`timing probe failed: ${stderr.replace(/https?:\/\/\S+/g, '[playback-url]').slice(0, 300)}`);
-  const data = JSON.parse(stdout);
-  return analyzePlaybackFrames(data.frames || [], { wallDurationMs: Date.now() - startedAt, requireAudio });
+  try {
+    const headers = /^https?:\/\//i.test(url) ? ['-headers', 'Referer: https://live.bilibili.com/\r\nUser-Agent: Mozilla/5.0\r\n'] : [];
+    await run('ffmpeg', ['-y', '-v', 'error', ...headers, '-i', url, '-t', String(Math.max(1, Math.round(durationMs / 1000))), '-c', 'copy', file]);
+    const wallDurationMs = Date.now() - startedAt;
+    const probed = await run('ffprobe', ['-v', 'error', '-show_frames', '-show_entries', 'frame=media_type,best_effort_timestamp_time,pkt_dts_time,pkt_duration_time', '-of', 'json', '-i', file]);
+    const data = JSON.parse(probed.stdout);
+    return analyzePlaybackFrames(data.frames || [], { wallDurationMs, requireAudio });
+  } finally {
+    if (temporary) fs.rmSync(temporary, { recursive: true, force: true });
+  }
 }

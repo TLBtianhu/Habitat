@@ -1,7 +1,7 @@
 # ADR-038：公开播放帧间隔与音视频节奏分析
 
 日期：2026-11-05
-状态：实现与本地验证通过，公开样本验证中
+状态：Accepted（本地与公开 6 秒样本验证通过）
 
 ## 背景
 
@@ -10,7 +10,7 @@
 ## 决策
 
 - 新增 `stream/playback-timing.mjs`，通过公开 playUrl 的 ffprobe `show_frames` 分析真实帧，不读取推流凭证。
-- 使用 `read_intervals=%+6` 获取完整 6 秒窗口，避免只读开头几个包就误判节奏。
+- 使用 FFmpeg `-t 6` 先截取原封包样本，再用本地 ffprobe `show_frames` 分析真实帧，不读取推流凭证；避免在直播输入上用不合适的定位/读取方式。公开样本另存为 `playback-timing-sample.flv`。
 - 视频使用 `best_effort_timestamp_time` 统计展示间隔；保留原始顺序检测非单调时间戳，排序仅用于间隔统计。
 - 输出：
   - 帧数、首末时间、持续时间；
@@ -35,3 +35,5 @@
 ## 公开验证边界
 
 另以最长 90 秒公开会话读取 6 秒播放样本，保存 `stream-timing-short.json`，包含帧间隔、最大间隔、起始差、持续时长差、非单调计数和 alerts。只有同时结合真实 LIVE、媒体样本和实际观看反馈，才能判断节奏是否改善；不能仅凭 codec、speed 或调度状态宣布无缓冲。
+
+2026-11-05 的公开验证进入 LIVE，样本中视频 30 帧、间隔 P50/P95 为 200ms，音频 282 帧、间隔约 21ms，音视频起始差为 0，持续时长差为 195ms，非单调计数均为 0，`alerts=[]`，最终 `stopReason=max_duration`。`mediaToWallRatio≈1.779` 只描述本次原封包采样与处理墙钟的比例，不作为健康判断。证据保存在 `data/artifacts/stream-timing-short.json` 与 `playback-timing-sample.flv`。
