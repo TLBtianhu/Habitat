@@ -74,7 +74,7 @@ Habitat 已完成多场所身份/任务状态、Owner 权限、真实 B 站音�
 
 - 查明 WSL 空闲自动关机和 VM 重启会带动 NapCat/Docker/OneBot 重连。
 - `vmIdleTimeout=-1`、`instanceIdleTimeout=-1` 已配置，显式停机和 `wsl --shutdown` 仍可用。
-- 原 `.wslconfig` 已备份为 `C:\Users\30680\.wslconfig.habitat-backup-20261105`。
+- 原 WSL 配置已在用户配置目录中保留备份；公开文档不暴露本机用户路径。
 - NapCat 使用 host 网络，避免 Docker bridge 登录服务断开。
 - 无显示环境通过临时包装禁用 GPU，避免 Worker 重启时 GPU fatal。
 - 使用 `napcat-attached.service` 附着管理，`Restart=no`，显式 `ExecStop` 清理运行容器。
